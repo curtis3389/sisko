@@ -1,0 +1,10 @@
+[workspace]
+members = ["sisko_lib"]
+
+[package]
+name = "sisko"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sisko_lib = { path = "./sisko_lib" }
