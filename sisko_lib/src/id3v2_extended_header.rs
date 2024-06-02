@@ -3,7 +3,7 @@ use crate::id3v2_extended_flags::ID3v2ExtendedFlags;
 use crate::synch_safe_integer::SynchSafeInteger;
 
 /// Represents the extended header for and ID3v2 tag.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ID3v2ExtendedHeader {
     /// The size of the whole extended header.
     pub size: u32,

@@ -9,7 +9,7 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 
 /// Represents an ID3v2 metadata tag.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ID3v2Tag {
     /// The header for the tag.
     pub header: ID3v2Header,

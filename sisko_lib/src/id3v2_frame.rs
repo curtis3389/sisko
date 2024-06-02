@@ -4,7 +4,7 @@ use crate::id3v2_version_number::ID3v2VersionNumber;
 
 /// Represents a frame in an ID3v2 tag.
 /// This is what is common referred to as a "tag" (e.g. the artist tag).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ID3v2Frame {
     /// The header for the frame.
     pub header: ID3v2FrameHeader,
