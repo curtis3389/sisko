@@ -1,6 +1,4 @@
-use crate::file::File;
-use crate::tag_service::ITagService;
-use crate::track::Track;
+use crate::domain::{File, ITagService, Track};
 use syrette::injectable;
 use syrette::ptr::SingletonPtr;
 
@@ -43,9 +41,9 @@ impl ITrackService for TrackService {
                 .map(|s| s.to_string())
                 .unwrap_or(file.name.clone()),
             artist: tag.artist().map(|s| s.to_string()).unwrap_or_default(),
-            length: "".to_string(),
+            length: "?:??".to_string(),
             file: file.clone(),
-            //tag: Rc::from(tag),
+            tags,
         }
     }
 }

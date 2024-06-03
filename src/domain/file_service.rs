@@ -1,6 +1,5 @@
-use crate::file::File;
-use crate::file_dialog_type::FileDialogType;
-use crate::file_type::FileType;
+use crate::domain::{File, FileType};
+use crate::ui::FileDialogType;
 use chrono::DateTime;
 use std::fs;
 use std::path::PathBuf;
@@ -55,6 +54,7 @@ impl IFileService for FileService {
         let metadata = path.metadata().ok();
         let file_type = Some(FileType::from(path));
         File {
+            absolute_path: fs::canonicalize(path).unwrap(),
             name: path
                 .file_name()
                 .map(|name| name.to_os_string())
@@ -106,14 +106,16 @@ impl IFileService for FileService {
             .collect();
 
         if let Some(parent_path) = path.parent() {
+            let path = parent_path.to_path_buf();
             files.insert(
                 0,
                 File {
+                    absolute_path: fs::canonicalize(&path).unwrap(),
                     name: "..".to_string(),
                     size: None,
                     file_type: Some(FileType::Directory),
                     date_modified: None,
-                    path: parent_path.to_path_buf(),
+                    path,
                 },
             );
         }

@@ -1,5 +1,4 @@
-use crate::file::File;
-use crate::tag::{ID3v2TagWrapper, ITag};
+use crate::domain::{File, ID3v2TagWrapper, Tag};
 use sisko_lib::id3v2_tag::ID3v2Tag;
 use syrette::injectable;
 
@@ -10,7 +9,7 @@ pub trait ITagService {
     /// # Arguments
     ///
     /// * `file` - The track to get the tags for.
-    fn get(&self, file: &File) -> Vec<Box<dyn ITag>>;
+    fn get(&self, file: &File) -> Vec<Box<dyn Tag>>;
 }
 
 /// Represents a service for working with audio file tags.
@@ -25,7 +24,7 @@ impl TagService {
 }
 
 impl ITagService for TagService {
-    fn get(&self, file: &File) -> Vec<Box<dyn ITag>> {
+    fn get(&self, file: &File) -> Vec<Box<dyn Tag>> {
         let id3v2 = ID3v2Tag::read_from_path(&file.path).unwrap();
         vec![Box::new(ID3v2TagWrapper::new(id3v2))]
     }

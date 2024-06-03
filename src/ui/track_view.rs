@@ -1,11 +1,11 @@
-use crate::file::File;
-use crate::track_column::TrackColumn;
+use crate::domain::{File, Track};
+use crate::ui::TrackColumn;
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
 
 /// Represents an audio track.
 #[derive(Clone, Debug)]
-pub struct Track {
+pub struct TrackView {
     /// The title of the track.
     pub title: String,
     /// The artist of the track.
@@ -14,11 +14,20 @@ pub struct Track {
     pub length: String,
     /// The file this track is from.
     pub file: File,
-    // The audio tag for this track.
-    //pub tag: Rc<dyn AudioTag>,
 }
 
-impl TableViewItem<TrackColumn> for Track {
+impl From<&Track> for TrackView {
+    fn from(track: &Track) -> Self {
+        Self {
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            length: track.length.clone(),
+            file: track.file.clone(),
+        }
+    }
+}
+
+impl TableViewItem<TrackColumn> for TrackView {
     /// Returns the value of the given column for this Track.
     ///
     /// # Arguments

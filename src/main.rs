@@ -1,30 +1,17 @@
-pub mod file;
-pub mod file_column;
-pub mod file_dialog_type;
-pub mod file_service;
-pub mod file_type;
-pub mod icursive;
-pub mod sisko_service;
-pub mod tag;
-pub mod tag_column;
-pub mod tag_service;
-pub mod track;
-pub mod track_column;
-pub mod track_service;
+pub mod domain;
+pub mod infrastructure;
 pub mod ui;
-pub mod ui_element;
 
-use crate::file_service::{FileService, IFileService};
-use crate::icursive::*;
-use crate::sisko_service::{ISiskoService, SiskoService};
-use crate::tag_service::{ITagService, TagService};
-use crate::track_service::{ITrackService, TrackService};
-use crate::ui::{IUi, Ui, UiWrapper};
+use crate::domain::{
+    FileService, IFileService, ISiskoService, ITagService, ITrackService, SiskoService, TagService,
+    TrackService,
+};
+use crate::ui::{CursiveWrapper, ICursive, Ui, UiHost, UiWrapper};
 use clap::Command;
 use sisko_lib::id3v2_frame::ID3v2Frame;
 use sisko_lib::id3v2_frame_fields::ID3v2FrameFields;
 use sisko_lib::id3v2_tag::ID3v2Tag;
-use std::fs::File as FsFile;
+use std::fs::File;
 use std::io::Write;
 use syrette::DIContainer;
 
@@ -66,7 +53,7 @@ pub fn new_container() -> DIContainer {
         .in_singleton_scope()
         .unwrap();
     container
-        .bind::<dyn IUi>()
+        .bind::<dyn Ui>()
         .to::<UiWrapper>()
         .unwrap()
         .in_singleton_scope()
@@ -88,7 +75,7 @@ pub fn cli() -> Command {
 
 /// Runs the program's cursive UI.
 pub fn run_gui(container: DIContainer) {
-    let ui = Ui::new(container);
+    let ui = UiHost::new(container);
     ui.run();
 }
 
@@ -112,7 +99,7 @@ pub fn run_test() {
                 picture_type: _,
                 description: _,
             } => {
-                let mut file = FsFile::create("other.jpg").unwrap();
+                let mut file = File::create("other.jpg").unwrap();
                 file.write_all(&picture_data).unwrap();
             }
             _ => panic!(),

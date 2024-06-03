@@ -1,8 +1,5 @@
-use crate::file::File;
-use crate::file_service::IFileService;
-use crate::track::Track;
-use crate::track_service::ITrackService;
-use crate::ui::IUi;
+use crate::domain::{File, IFileService, ITrackService, TagField, Track};
+use crate::ui::Ui;
 use syrette::injectable;
 use syrette::ptr::SingletonPtr;
 
@@ -15,6 +12,8 @@ pub trait ISiskoService {
     ///
     /// * `file` - The folder to add.
     fn add_folder(&self, file: File);
+
+    fn select_track(&self, track: &Track);
 }
 
 /// Represents a service for application actions.
@@ -26,7 +25,7 @@ pub struct SiskoService {
     track_service: SingletonPtr<dyn ITrackService>,
 
     /// A service for the UI.
-    ui: SingletonPtr<dyn IUi>,
+    ui: SingletonPtr<dyn Ui>,
 }
 
 #[injectable(ISiskoService)]
@@ -41,7 +40,7 @@ impl SiskoService {
     pub fn new(
         file_service: SingletonPtr<dyn IFileService>,
         track_service: SingletonPtr<dyn ITrackService>,
-        ui: SingletonPtr<dyn IUi>,
+        ui: SingletonPtr<dyn Ui>,
     ) -> Self {
         SiskoService {
             file_service,
@@ -56,5 +55,10 @@ impl ISiskoService for SiskoService {
         let files = self.file_service.get_files_in_dir_recursive(&file.path);
         let tracks: Vec<Track> = files.iter().map(|f| self.track_service.get(f)).collect();
         tracks.into_iter().for_each(|t| self.ui.add_cluster_file(t));
+    }
+
+    fn select_track(&self, track: &Track) {
+        let tag_fields: Vec<TagField> = track.tags.iter().map(|t| t.fields()).flatten().collect();
+        self.ui.set_metadata_table(&tag_fields);
     }
 }

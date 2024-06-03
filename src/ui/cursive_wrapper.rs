@@ -1,12 +1,7 @@
+use crate::ui::ICursive;
 use cursive::CursiveRunnable;
 use std::sync::Mutex;
 use syrette::injectable;
-
-/// Represents the default cursive root.
-pub trait ICursive {
-    /// Gets the default cursive root.
-    fn root(&self) -> &Mutex<CursiveRunnable>;
-}
 
 /// Represents a wrapper for the default cursive root.
 pub struct CursiveWrapper {
