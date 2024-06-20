@@ -1,4 +1,4 @@
-use crate::domain::{ISiskoService, ITrackService};
+use crate::domain::ISiskoService;
 use crate::ui::*;
 use cursive::event::{Event, Key};
 use cursive::traits::*;
@@ -121,18 +121,12 @@ impl UiHost {
                     )
                     .unwrap();
                 let container = s.user_data().unwrap() as &mut DIContainer;
-                let track_service = container
-                    .get::<dyn ITrackService>()
-                    .unwrap()
-                    .singleton()
-                    .unwrap();
-                let track = track_service.get(&selected_track.file);
                 let sisko_service = container
                     .get::<dyn ISiskoService>()
                     .unwrap()
                     .transient()
                     .unwrap();
-                sisko_service.select_track(&track);
+                sisko_service.select_track(&selected_track.track);
             })
             .with_name(CLUSTER_FILE_TABLE);
 
@@ -154,6 +148,20 @@ impl UiHost {
                 TagFieldColumn::NewValue.as_str(),
                 |c| c,
             )
+            .on_submit(|s: &mut Cursive, _row: usize, index: usize| {
+                let selected_field = s
+                    .call_on_name(
+                        METADATA_TABLE,
+                        |table_view: &mut TableView<TagFieldView, TagFieldColumn>| {
+                            let item = table_view.borrow_item(index).unwrap();
+                            item.clone()
+                        },
+                    )
+                    .unwrap();
+                let container = s.user_data().unwrap() as &mut DIContainer;
+                let ui = container.get::<dyn Ui>().unwrap().singleton().unwrap();
+                ui.open_tag_field_dialog(&selected_field);
+            })
             .with_name(METADATA_TABLE);
 
         let hideable_bottom_panel = HideableView::new(Panel::new(metadata_table.full_screen()))

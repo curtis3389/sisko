@@ -1,28 +1,27 @@
-use crate::domain::{File, Track};
+use crate::domain::Track;
 use crate::ui::TrackColumn;
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
+use std::sync::{Arc, Mutex};
 
 /// Represents an audio track.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TrackView {
-    /// The title of the track.
     pub title: String,
-    /// The artist of the track.
     pub artist: String,
-    /// The length of the track.
     pub length: String,
-    /// The file this track is from.
-    pub file: File,
+    pub track: Arc<Mutex<Track>>,
 }
 
-impl From<&Track> for TrackView {
-    fn from(track: &Track) -> Self {
+impl From<&Arc<Mutex<Track>>> for TrackView {
+    fn from(track: &Arc<Mutex<Track>>) -> Self {
+        let mutex = track.clone();
+        let track = track.lock().unwrap();
         Self {
-            title: track.title.clone(),
-            artist: track.artist.clone(),
-            length: track.length.clone(),
-            file: track.file.clone(),
+            title: track.title().unwrap_or("<no title>".to_string()),
+            artist: track.artist().unwrap_or("<no artist>".to_string()),
+            length: track.length().unwrap_or("?:??".to_string()),
+            track: mutex,
         }
     }
 }

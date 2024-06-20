@@ -3,6 +3,7 @@ use crate::ui::FileColumn;
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Represents the UI view of a file.
 #[derive(Clone, Debug)]
@@ -18,11 +19,11 @@ pub struct FileView {
     pub date_modified: String,
     /// The file's path.
     pub path: String,
-    pub file: File,
+    pub file: Arc<File>,
 }
 
-impl From<&File> for FileView {
-    fn from(file: &File) -> FileView {
+impl From<&Arc<File>> for FileView {
+    fn from(file: &Arc<File>) -> FileView {
         FileView {
             absolute_path: file.absolute_path.clone(),
             name: file.name.clone(),

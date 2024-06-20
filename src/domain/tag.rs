@@ -1,16 +1,52 @@
-use crate::domain::TagField;
+use crate::domain::{TagField, TagFieldType, TagType};
 
 /// Represents a metadata tag in an audio file.
-pub trait Tag {
-    /// Returns the artist field, if any.
-    fn artist(&self) -> Option<String>;
+#[derive(Clone, Debug)]
+pub struct Tag {
+    pub tag_type: TagType,
+    pub fields: Vec<TagField>,
+}
 
-    /// Returns the name of this tag (e.g. "ID3v2").
-    fn tag_name(&self) -> String;
+impl Tag {
+    pub fn new(tag_type: TagType, fields: Vec<TagField>) -> Self {
+        Self { tag_type, fields }
+    }
 
-    /// Returns the track title field, if any.
-    fn title(&self) -> Option<String>;
+    pub fn artist(&self) -> Option<String> {
+        self.fields
+            .iter()
+            .filter_map(|f| match &f {
+                TagField::Text(tag_field_type, value, _) => match tag_field_type {
+                    TagFieldType::Artist => Some(value.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .next()
+    }
 
-    /// Returns the fields in the tag.
-    fn fields(&self) -> Vec<TagField>;
+    pub fn title(&self) -> Option<String> {
+        self.fields
+            .iter()
+            .filter_map(|f| match &f {
+                TagField::Text(tag_field_type, value, _) => match tag_field_type {
+                    TagFieldType::Title => Some(value.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .next()
+    }
+
+    pub fn update_field(&mut self, tag_field: TagField) {
+        let (index, _) = self
+            .fields
+            .iter()
+            .enumerate()
+            .filter(|(_, ref field)| field.tag_field_type() == tag_field.tag_field_type())
+            .next()
+            .unwrap();
+        self.fields.remove(index);
+        self.fields.insert(index, tag_field);
+    }
 }

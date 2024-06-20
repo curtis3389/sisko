@@ -1,9 +1,11 @@
 use crate::domain::FileType;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct File {
+    pub id: Uuid,
     pub absolute_path: PathBuf,
     /// The name of the file.
     pub name: String,

@@ -1,5 +1,6 @@
 use crate::domain::{File, IFileService, ITrackService, TagField, Track};
 use crate::ui::Ui;
+use std::sync::{Arc, Mutex};
 use syrette::injectable;
 use syrette::ptr::SingletonPtr;
 
@@ -11,9 +12,17 @@ pub trait ISiskoService {
     /// # Arguments
     ///
     /// * `file` - The folder to add.
-    fn add_folder(&self, file: File);
+    fn add_folder(&self, file: Arc<File>);
 
-    fn select_track(&self, track: &Track);
+    /// Selects the given track.
+    /// This changes fields shown in the metadata table.
+    ///
+    /// # Arguments
+    ///
+    /// * `track` - The track to select.
+    fn select_track(&self, track: &Arc<Mutex<Track>>);
+
+    fn update_tag_field(&self, field: &TagField);
 }
 
 /// Represents a service for application actions.
@@ -51,14 +60,19 @@ impl SiskoService {
 }
 
 impl ISiskoService for SiskoService {
-    fn add_folder(&self, file: File) {
+    fn add_folder(&self, file: Arc<File>) {
         let files = self.file_service.get_files_in_dir_recursive(&file.path);
-        let tracks: Vec<Track> = files.iter().map(|f| self.track_service.get(f)).collect();
+        let tracks: Vec<Arc<Mutex<Track>>> =
+            files.iter().map(|f| self.track_service.load(f)).collect();
         tracks.into_iter().for_each(|t| self.ui.add_cluster_file(t));
     }
 
-    fn select_track(&self, track: &Track) {
-        let tag_fields: Vec<TagField> = track.tags.iter().map(|t| t.fields()).flatten().collect();
-        self.ui.set_metadata_table(&tag_fields);
+    fn select_track(&self, track: &Arc<Mutex<Track>>) {
+        self.ui.set_metadata_table(&track);
+    }
+
+    fn update_tag_field(&self, _field: &TagField) {
+        //self.tag_service.update_tag_field(field);
+        todo!()
     }
 }

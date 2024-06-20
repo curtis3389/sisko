@@ -18,3 +18,6 @@ pub const HIDEABLE_RIGHT_PANEL: &str = "hideable_right_panel";
 
 /// The name of the metadata table.
 pub const METADATA_TABLE: &str = "metadata_table";
+
+/// The name of the input for the new value of a field.
+pub const NEW_FIELD_VALUE: &str = "new_field_value";

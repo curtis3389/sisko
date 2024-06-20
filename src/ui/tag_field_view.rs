@@ -1,31 +1,44 @@
-use crate::domain::TagField;
+use crate::domain::{TagField, TagFieldType, TagType, Track};
 use crate::ui::TagFieldColumn;
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
+use std::sync::{Arc, Mutex};
 
 /// Represents the UI view of a tag field.
 #[derive(Clone, Debug)]
 pub struct TagFieldView {
-    /// The name of the field.
-    pub field_name: String,
+    /// The track the tag field is from.
+    pub track: Arc<Mutex<Track>>,
 
-    /// The original value of the field.
-    pub field_value: String,
+    /// The type of the tag the tag field is from.
+    pub tag_type: TagType,
 
-    /// The new value for the field.
-    pub new_field_value: String,
+    pub tag_field_type: TagFieldType,
 }
 
-impl From<&TagField> for TagFieldView {
-    fn from(field: &TagField) -> Self {
+impl TagFieldView {
+    pub fn new(track: &Arc<Mutex<Track>>, tag_type: &TagType, field: &TagFieldType) -> Self {
         Self {
-            field_name: field.field_name.clone(),
-            field_value: field.field_value.clone(),
-            new_field_value: match &field.new_field_value {
-                Some(s) => s.clone(),
-                None => String::new(),
-            },
+            track: track.clone(),
+            tag_type: tag_type.clone(),
+            tag_field_type: field.clone(),
         }
+    }
+
+    pub fn get_field(&self) -> TagField {
+        let track = self.track.lock().unwrap();
+        let tag = track
+            .tags
+            .iter()
+            .filter(|tag| tag.tag_type == self.tag_type)
+            .next()
+            .unwrap();
+        tag.fields
+            .iter()
+            .filter(|f| f.tag_field_type() == self.tag_field_type)
+            .next()
+            .unwrap()
+            .clone()
     }
 }
 
@@ -37,9 +50,9 @@ impl TableViewItem<TagFieldColumn> for TagFieldView {
     /// * `column` - The column to get the value of.
     fn to_column(&self, column: TagFieldColumn) -> String {
         match column {
-            TagFieldColumn::Tag => self.field_name.to_string(),
-            TagFieldColumn::OriginalValue => self.field_value.to_string(),
-            TagFieldColumn::NewValue => self.new_field_value.to_string(),
+            TagFieldColumn::Tag => self.get_field().display_name(),
+            TagFieldColumn::OriginalValue => self.get_field().display_value(),
+            TagFieldColumn::NewValue => self.get_field().display_new_value(),
         }
     }
 
@@ -53,10 +66,12 @@ impl TableViewItem<TagFieldColumn> for TagFieldView {
     where
         Self: Sized,
     {
+        let field = self.get_field();
+        let other = other.get_field();
         match column {
-            TagFieldColumn::Tag => self.field_name.cmp(&other.field_name),
-            TagFieldColumn::OriginalValue => self.field_value.cmp(&other.field_value),
-            TagFieldColumn::NewValue => self.new_field_value.cmp(&other.new_field_value),
+            TagFieldColumn::Tag => field.display_name().cmp(&other.display_name()),
+            TagFieldColumn::OriginalValue => field.display_value().cmp(&other.display_value()),
+            TagFieldColumn::NewValue => field.display_new_value().cmp(&other.display_new_value()),
         }
     }
 }
