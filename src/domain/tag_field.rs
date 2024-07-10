@@ -1,5 +1,6 @@
 use crate::domain::TagFieldType;
 use base64::prelude::*;
+use sisko_lib::{id3v2_frame::ID3v2Frame, id3v2_frame_fields::ID3v2FrameFields};
 
 /*
 TALB = Album
@@ -40,12 +41,18 @@ TYER = Year part of Date
 /// Represents a field in a tag.
 #[derive(Clone, Debug)]
 pub enum TagField {
+    /// A field containing binary data.
     Binary(TagFieldType, Vec<u8>, Option<Vec<u8>>),
+
+    /// A field containing text data.
     Text(TagFieldType, String, Option<String>),
+
+    /// An unrecognized field.
     Unknown(TagFieldType, String),
 }
 
 impl TagField {
+    /// Returns the type of the field for display.
     pub fn display_name(&self) -> String {
         match &self {
             TagField::Binary(tag_field_type, _, _) => tag_field_type.display_name(),
@@ -54,6 +61,7 @@ impl TagField {
         }
     }
 
+    /// Returns the value of the field for display.
     pub fn display_value(&self) -> String {
         match &self {
             TagField::Binary(_, value, _) => {
@@ -64,6 +72,7 @@ impl TagField {
         }
     }
 
+    /// Returns the new value of the field for display.
     pub fn display_new_value(&self) -> String {
         match &self {
             TagField::Binary(_, _, new_value) => new_value
@@ -75,11 +84,31 @@ impl TagField {
         .unwrap_or(String::new())
     }
 
+    /// Returns the type of the field.
     pub fn tag_field_type(&self) -> TagFieldType {
         match &self {
             TagField::Binary(tag_field_type, _, _) => tag_field_type.clone(),
             TagField::Text(tag_field_type, _, _) => tag_field_type.clone(),
             TagField::Unknown(tag_field_type, _) => tag_field_type.clone(),
+        }
+    }
+}
+
+impl From<&ID3v2Frame> for TagField {
+    fn from(frame: &ID3v2Frame) -> Self {
+        match &frame.fields {
+            ID3v2FrameFields::TextFields { encoding: _, text } => {
+                TagField::Text(TagFieldType::from(frame), text[0].clone(), None)
+            }
+            ID3v2FrameFields::UserDefinedTextFields {
+                encoding: _,
+                description: _,
+                value,
+            } => TagField::Text(TagFieldType::from(frame), value[0].clone(), None),
+            ID3v2FrameFields::UniqueFileIdentifierFields { owner_id: _, id } => {
+                TagField::Binary(TagFieldType::from(frame), id.clone(), None)
+            }
+            _ => TagField::Unknown(TagFieldType::from(frame), String::new()),
         }
     }
 }

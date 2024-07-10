@@ -1,5 +1,8 @@
 use crate::domain::{File, FileType, IFileService, ISiskoService, TagField, Track};
+use crate::infrastructure::CursiveExtensions;
+use crate::infrastructure::DIContainerExtensions;
 use crate::ui::*;
+use anyhow::{anyhow, Result};
 use cursive::reexports::enumset::enum_set;
 use cursive::theme::{ColorStyle, Effect, Style};
 use cursive::traits::*;
@@ -7,9 +10,10 @@ use cursive::views::{Dialog, EditView, LinearLayout, TextView};
 use cursive::{CbSink, Cursive};
 use cursive_table_view::TableView;
 use std::env;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use syrette::injectable;
 use syrette::ptr::SingletonPtr;
-use syrette::{injectable, DIContainer};
 
 /// Represents the UI backed by a cursive callback sink.
 pub struct UiWrapper {
@@ -17,7 +21,7 @@ pub struct UiWrapper {
     cb_sink: CbSink,
 }
 
-#[injectable(Ui)]
+#[injectable(IUi)]
 impl UiWrapper {
     /// Returns a new wrapper of the UI.
     ///
@@ -25,13 +29,16 @@ impl UiWrapper {
     ///
     /// * `cursive` - The cursive root to create a wrapper with.
     pub fn new(cursive: SingletonPtr<dyn ICursive>) -> Self {
-        let root = cursive.root().lock().unwrap();
+        let root = cursive
+            .root()
+            .lock()
+            .expect("Failed to lock cursive root mutex!");
         let cb_sink = root.cb_sink().clone();
         UiWrapper { cb_sink }
     }
 }
 
-impl Ui for UiWrapper {
+impl IUi for UiWrapper {
     fn add_cluster_file(&self, track: Arc<Mutex<Track>>) {
         let track_view = TrackView::from(&track);
         self.cb_sink
@@ -43,7 +50,12 @@ impl Ui for UiWrapper {
                     },
                 );
             }))
-            .unwrap();
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Error sending callback to add track to {}!",
+                    CLUSTER_FILE_TABLE,
+                )
+            });
     }
 
     fn open_directory_dialog(&self) {
@@ -53,17 +65,15 @@ impl Ui for UiWrapper {
                     s,
                     FileDialogType::Directory,
                     |s: &mut Cursive, f: Arc<File>| {
-                        let container = s.user_data().unwrap() as &mut DIContainer;
-                        let sisko_service = container
-                            .get::<dyn ISiskoService>()
-                            .unwrap()
-                            .transient()
-                            .unwrap();
-                        sisko_service.add_folder(f);
+                        let container = s.di_container();
+                        let sisko_service = container.expect_transient::<dyn ISiskoService>();
+                        if sisko_service.add_folder(f).is_err() {
+                            // TODO: log error and let user know
+                        }
                     },
                 );
             }))
-            .unwrap();
+            .expect("Error sending callback to open directory dialog!");
     }
 
     fn open_tag_field_dialog(&self, field: &TagFieldView) {
@@ -72,21 +82,20 @@ impl Ui for UiWrapper {
             .send(Box::new(move |s: &mut Cursive| {
                 tag_field_dialog(s, &field);
             }))
-            .unwrap();
+            .expect("Error sending callback to open tag field dialog!");
     }
 
     fn set_metadata_table(&self, track: &Arc<Mutex<Track>>) {
         let arc = track;
-        let track = track.lock().unwrap();
+        let track = track.lock().expect("Failed to lock track mutex!");
         let items: Vec<TagFieldView> = track
             .tags
             .iter()
-            .map(|tag| {
+            .flat_map(|tag| {
                 tag.fields
                     .iter()
                     .map(|f| TagFieldView::new(arc, &tag.tag_type, &f.tag_field_type()))
             })
-            .flatten()
             .collect();
         self.cb_sink
             .send(Box::new(move |s: &mut Cursive| {
@@ -97,7 +106,7 @@ impl Ui for UiWrapper {
                     },
                 );
             }))
-            .unwrap();
+            .unwrap_or_else(|_| panic!("Error sending callback to set {}", METADATA_TABLE,));
     }
 }
 
@@ -106,23 +115,24 @@ impl Ui for UiWrapper {
 ///
 /// # Arguments
 ///
+/// * `s` - The Cursive to open the dialog with.
 /// * `dialog_type` - The type of the dialog to open.
 /// * `on_choose` - The callback to call when user makes their choice.
 fn new_file_dialog<F>(s: &mut Cursive, dialog_type: FileDialogType, on_choose: F)
 where
     F: 'static + Fn(&mut Cursive, Arc<File>) + Clone,
 {
-    let current_directory = env::current_dir().unwrap();
-    let container = s.user_data().unwrap() as &mut DIContainer;
-    let file_service = container
-        .get::<dyn IFileService>()
-        .unwrap()
-        .singleton()
-        .unwrap();
+    let current_directory = match env::current_dir() {
+        Ok(dir) => dir,
+        _ => PathBuf::default(),
+    };
+    let container = s.di_container();
+    let file_service = container.expect_singleton::<dyn IFileService>();
     let files: Vec<FileView> = file_service
         .get_files_in_dir(&current_directory, dialog_type)
+        .unwrap_or(vec![]) // TODO: log warning and provide error to user
         .iter()
-        .map(|f| FileView::from(f))
+        .map(FileView::from)
         .collect();
 
     let on_choose_copy = on_choose.clone();
@@ -140,38 +150,49 @@ where
                 .call_on_name(
                     FILE_TABLE,
                     |table_view: &mut TableView<FileView, FileColumn>| {
-                        let item = table_view.borrow_item(index).unwrap();
+                        let item = table_view.borrow_item(index).unwrap_or_else(|| {
+                            panic!(
+                                "Failed to get the submitted item at {} from {}!",
+                                index, FILE_TABLE
+                            )
+                        });
                         item.clone()
                     },
                 )
-                .unwrap();
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to call on submit lambda to get selected item in {}!",
+                        FILE_TABLE
+                    )
+                });
             let selected_file = selected_file.file;
             if dialog_type == FileDialogType::AudioFile
                 && selected_file.file_type != Some(FileType::Directory)
             {
                 on_choose_copy(s, selected_file);
                 s.pop_layer();
-            } else {
-                if selected_file.file_type == Some(FileType::Directory) {
-                    let container = s.user_data().unwrap() as &mut DIContainer;
-                    let file_service = container
-                        .get::<dyn IFileService>()
-                        .unwrap()
-                        .singleton()
-                        .unwrap();
-                    let files: Vec<FileView> = file_service
-                        .get_files_in_dir(&selected_file.path, dialog_type)
-                        .iter()
-                        .map(|f| FileView::from(f))
-                        .collect();
+            } else if selected_file.file_type == Some(FileType::Directory) {
+                let container = s.di_container();
+                let file_service = container.expect_singleton::<dyn IFileService>();
+                let files: Vec<FileView> = file_service
+                    .get_files_in_dir(&selected_file.path, dialog_type)
+                    .unwrap_or(vec![]) // TODO: log a warning, maybe add an error item to list
+                    .iter()
+                    .map(FileView::from)
+                    .collect();
 
-                    s.call_on_name(
-                        FILE_TABLE,
-                        |table_view: &mut TableView<FileView, FileColumn>| {
-                            table_view.set_items(files);
-                        },
-                    );
-                }
+                s.call_on_name(
+                    FILE_TABLE,
+                    |table_view: &mut TableView<FileView, FileColumn>| {
+                        table_view.set_items(files);
+                    },
+                )
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to call on submit lambda to get set subdir items in {}!",
+                        FILE_TABLE
+                    )
+                });
             }
         })
         .items(files)
@@ -185,19 +206,34 @@ where
     let dialog = Dialog::around(file_table)
         .title(title)
         .button("Choose", move |s: &mut Cursive| {
-            let file = s
+            if let Ok(file) = s
                 .call_on_name(
                     FILE_TABLE,
-                    |table_view: &mut TableView<FileView, FileColumn>| {
-                        table_view
-                            .borrow_item(table_view.item().unwrap())
-                            .unwrap()
-                            .clone()
+                    |table_view: &mut TableView<FileView, FileColumn>| -> Result<FileView> {
+                        let index = table_view.item().ok_or(anyhow!(
+                            "Error getting currently selected item in {} when there is none!",
+                            FILE_TABLE
+                        ))?;
+                        Ok(table_view
+                            .borrow_item(index)
+                            .ok_or(anyhow!(
+                                "Error getting currently selected item in {} by index {}!",
+                                FILE_TABLE,
+                                index
+                            ))?
+                            .clone())
                     },
                 )
-                .unwrap();
-            on_choose(s, file.file);
-            s.pop_layer();
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to call on choose lambda to get selected item in {}!",
+                        FILE_TABLE
+                    )
+                })
+            {
+                on_choose(s, file.file);
+                s.pop_layer();
+            }
         })
         .button("Cancel", |s| {
             s.pop_layer();
@@ -206,6 +242,12 @@ where
     s.add_layer(dialog);
 }
 
+/// Opens a tag field edit dialog for the given tag field view.
+///
+/// # Arguments
+///
+/// * `s` - The Cursive to open the dialog with.
+/// * `view` - The tag field view to open the dialog for.
 fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
     let track = view.track.clone();
     let tag_type = view.tag_type.clone();
@@ -251,7 +293,12 @@ fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
                 .call_on_name(NEW_FIELD_VALUE, |edit_view: &mut EditView| {
                     edit_view.get_content().as_ref().clone()
                 })
-                .unwrap();
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to call on save lambda to get edit field content in {}!",
+                        NEW_FIELD_VALUE
+                    )
+                });
             let field = field.clone();
             let field = match field {
                 TagField::Binary(_, _, _new_field_value) => todo!("handle selected file"),
@@ -260,7 +307,7 @@ fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
                 }
                 TagField::Unknown(_, _) => field,
             };
-            let mut track = track.lock().unwrap();
+            let mut track = track.lock().expect("Failed to lock track mutex!");
             track.update_tag_field(&tag_type, field);
             s.pop_layer();
         })

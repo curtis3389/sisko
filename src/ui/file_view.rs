@@ -8,6 +8,7 @@ use std::sync::Arc;
 /// Represents the UI view of a file.
 #[derive(Clone, Debug)]
 pub struct FileView {
+    /// The absolute path of the file.
     pub absolute_path: PathBuf,
     /// The name of the file.
     pub name: String,
@@ -19,6 +20,7 @@ pub struct FileView {
     pub date_modified: String,
     /// The file's path.
     pub path: String,
+    /// The file.
     pub file: Arc<File>,
 }
 

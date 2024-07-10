@@ -1,51 +1,22 @@
-use crate::domain::{File, FileType};
+use crate::domain::{File, FileType, IFileService};
 use crate::ui::FileDialogType;
+use anyhow::{anyhow, Result};
 use chrono::DateTime;
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use syrette::injectable;
 use uuid::Uuid;
 
-/// Represents a service for working with files.
-pub trait IFileService {
-    /// Gets the file at the given path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path of the file to get.
-    fn get(&self, id: &Uuid) -> Arc<File>;
-
-    /// Returns a vector of files under the given path for the given file/folder
-    /// dialog type.
-    ///
-    /// This will also include a ".." file for the parent directory.
-    ///
-    /// If for a directory dialog, this only returns directories.
-    /// If for an audio file dialog, this returns audio files and directories.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the directory to get the files from.
-    /// * `dialog_type` - The type of the file/folder dialog to get the file for.
-    fn get_files_in_dir(&self, path: &PathBuf, dialog_type: FileDialogType) -> Vec<Arc<File>>;
-
-    /// Returns a vector of tracks found under the directory with the given path.
-    /// This will search recursively.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the directory to search for tracks.
-    fn get_files_in_dir_recursive(&self, path: &PathBuf) -> Vec<Arc<File>>;
-
-    fn load(&self, path: &PathBuf) -> Arc<File>;
-}
-
 /// Represents a service for working with files backed by the native filesystem.
 pub struct FileService {
+    /// The files loaded into the service.
     files: Mutex<HashMap<Uuid, Arc<File>>>,
+
+    /// The ID of the file ID namespace.
     namespace_id: Uuid,
 }
 
@@ -60,36 +31,52 @@ impl FileService {
     }
 }
 
+impl Default for FileService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IFileService for FileService {
-    fn get(&self, id: &Uuid) -> Arc<File> {
-        self.files.lock().unwrap().get(id).unwrap().clone()
+    fn get(&self, id: &Uuid) -> Result<Arc<File>> {
+        let file = self
+            .files
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock files mutex!"))?
+            .get(id)
+            .ok_or(anyhow!("Couldn't find file with the id {}!", id))?
+            .clone();
+        Ok(file)
     }
 
-    fn get_files_in_dir(&self, path: &PathBuf, dialog_type: FileDialogType) -> Vec<Arc<File>> {
-        let paths = fs::read_dir(path).unwrap();
-        let mut files: Vec<Arc<File>> = paths
-            .filter_map(|dir_result| {
-                let dir = dir_result.unwrap();
-                let file = self.load(&dir.path());
-                match file.file_type {
-                    Some(file_type) => match dialog_type {
-                        FileDialogType::AudioFile => match file_type {
-                            FileType::UnsupportedFile => None,
-                            _ => Some(file),
-                        },
-                        FileDialogType::Directory => match file_type {
-                            FileType::Directory => Some(file),
-                            _ => None,
-                        },
+    fn get_files_in_dir(&self, path: &Path, dialog_type: FileDialogType) -> Result<Vec<Arc<File>>> {
+        let paths = fs::read_dir(path)?;
+        let files: Vec<Arc<File>> = paths
+            .map(|dir_result| -> Result<Arc<File>> {
+                let dir = dir_result?;
+                self.load(&dir.path())
+            })
+            .try_collect()?;
+        let mut files: Vec<Arc<File>> = files
+            .into_iter()
+            .filter_map(|file| match file.file_type {
+                Some(file_type) => match dialog_type {
+                    FileDialogType::AudioFile => match file_type {
+                        FileType::UnsupportedFile => None,
+                        _ => Some(file),
                     },
-                    None => None,
-                }
+                    FileDialogType::Directory => match file_type {
+                        FileType::Directory => Some(file),
+                        _ => None,
+                    },
+                },
+                None => None,
             })
             .collect();
 
         if let Some(parent_path) = path.parent() {
             let path = parent_path.to_path_buf();
-            let absolute_path = fs::canonicalize(&path).unwrap();
+            let absolute_path = fs::canonicalize(&path)?;
             files.insert(
                 0,
                 Arc::new(File {
@@ -107,18 +94,18 @@ impl IFileService for FileService {
             );
         }
 
-        files
+        Ok(files)
     }
 
-    fn get_files_in_dir_recursive(&self, path: &PathBuf) -> Vec<Arc<File>> {
-        let files = self.get_files_in_dir(path, FileDialogType::AudioFile);
+    fn get_files_in_dir_recursive(&self, path: &Path) -> Result<Vec<Arc<File>>> {
+        let files = self.get_files_in_dir(path, FileDialogType::AudioFile)?;
         let mut audio_files: Vec<Arc<File>> = files
             .iter()
             .filter(|f| match f.file_type {
                 Some(file_type) => file_type != FileType::Directory,
                 None => false,
             })
-            .map(|f| f.clone())
+            .cloned()
             .collect();
         let directories = files
             .iter()
@@ -127,18 +114,18 @@ impl IFileService for FileService {
                 None => false,
             })
             .filter(|f| f.name != "..");
-        let mut sub_files: Vec<Arc<File>> = directories
+        let sub_files: Vec<Vec<Arc<File>>> = directories
             .map(|f| self.get_files_in_dir_recursive(&f.path))
-            .flatten()
-            .collect();
+            .try_collect()?;
+        let mut sub_files: Vec<Arc<File>> = sub_files.into_iter().flatten().collect();
         audio_files.append(&mut sub_files);
-        audio_files
+        Ok(audio_files)
     }
 
-    fn load(&self, path: &PathBuf) -> Arc<File> {
+    fn load(&self, path: &Path) -> Result<Arc<File>> {
         let metadata = path.metadata().ok();
         let file_type = Some(FileType::from(path));
-        let absolute_path = fs::canonicalize(path).unwrap();
+        let absolute_path = fs::canonicalize(path)?;
         let file = File {
             id: Uuid::new_v5(
                 &self.namespace_id,
@@ -151,10 +138,7 @@ impl IFileService for FileService {
                 .expect("Every file looked at should have a filename!")
                 .into_string()
                 .unwrap_or(String::from("<invalid unicode>")),
-            size: match &metadata {
-                Some(metadata) => Some(metadata.len()),
-                None => None,
-            },
+            size: metadata.as_ref().map(|metadata| metadata.len()),
             file_type,
             date_modified: match &metadata {
                 Some(metadata) => match metadata.modified() {
@@ -169,11 +153,14 @@ impl IFileService for FileService {
                 },
                 None => None,
             },
-            path: path.clone(),
+            path: path.to_path_buf(),
         };
         let file = Arc::new(file);
-        let mut files = self.files.lock().unwrap();
+        let mut files = self
+            .files
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock the files mutex!"))?;
         files.insert(file.id, file.clone());
-        file
+        Ok(file)
     }
 }

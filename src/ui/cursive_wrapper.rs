@@ -19,6 +19,12 @@ impl CursiveWrapper {
     }
 }
 
+impl Default for CursiveWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ICursive for CursiveWrapper {
     fn root(&self) -> &Mutex<CursiveRunnable> {
         &self.root

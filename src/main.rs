@@ -6,7 +6,8 @@ use crate::domain::{
     FileService, IFileService, ISiskoService, ITagService, ITrackService, SiskoService, TagService,
     TrackService,
 };
-use crate::ui::{CursiveWrapper, ICursive, Ui, UiHost, UiWrapper};
+use crate::ui::{CursiveWrapper, ICursive, IUi, UiHost, UiWrapper};
+use anyhow::Result;
 use clap::Command;
 use sisko_lib::id3v2_frame::ID3v2Frame;
 use sisko_lib::id3v2_frame_fields::ID3v2FrameFields;
@@ -16,54 +17,44 @@ use std::io::Write;
 use syrette::DIContainer;
 
 /// This is the entrypoint of the program.
-fn main() {
-    let container = new_container();
+fn main() -> Result<()> {
+    let container = new_container()?;
     let matches = cli().get_matches();
     match matches.subcommand() {
         None => run_gui(container),
         _ => run_test(),
     }
+    Ok(())
 }
 
 /// Returns a new dependency injection container.
-pub fn new_container() -> DIContainer {
+pub fn new_container() -> Result<DIContainer> {
     let mut container = DIContainer::new();
     container
         .bind::<dyn IFileService>()
-        .to::<FileService>()
-        .unwrap()
-        .in_singleton_scope()
-        .unwrap();
+        .to::<FileService>()?
+        .in_singleton_scope()?;
     container
         .bind::<dyn ITagService>()
-        .to::<TagService>()
-        .unwrap()
-        .in_singleton_scope()
-        .unwrap();
+        .to::<TagService>()?
+        .in_singleton_scope()?;
     container
         .bind::<dyn ITrackService>()
-        .to::<TrackService>()
-        .unwrap()
-        .in_singleton_scope()
-        .unwrap();
+        .to::<TrackService>()?
+        .in_singleton_scope()?;
     container
         .bind::<dyn ICursive>()
-        .to::<CursiveWrapper>()
-        .unwrap()
-        .in_singleton_scope()
-        .unwrap();
+        .to::<CursiveWrapper>()?
+        .in_singleton_scope()?;
     container
-        .bind::<dyn Ui>()
-        .to::<UiWrapper>()
-        .unwrap()
-        .in_singleton_scope()
-        .unwrap();
+        .bind::<dyn IUi>()
+        .to::<UiWrapper>()?
+        .in_singleton_scope()?;
     container
         .bind::<dyn ISiskoService>()
-        .to::<SiskoService>()
-        .unwrap()
+        .to::<SiskoService>()?
         .in_transient_scope();
-    container
+    Ok(container)
 }
 
 /// Returns a new clap Command for the program's CLI.
@@ -81,7 +72,8 @@ pub fn run_gui(container: DIContainer) {
 
 /// Runs a test.
 pub fn run_test() {
-    let tag = ID3v2Tag::read_from_path("/home/curtis/Downloads/04_discipline_64kb.mp3").unwrap();
+    let tag = ID3v2Tag::read_from_path("/home/curtis/Downloads/04_discipline_64kb.mp3")
+        .expect("Couldn't open test file!");
     println!("{:#?}", tag);
     let mut apic = tag
         .frames
@@ -89,7 +81,7 @@ pub fn run_test() {
         .filter(|f| f.header.frame_id == "APIC")
         .collect::<Vec<&ID3v2Frame>>();
 
-    if apic.len() != 0 {
+    if !apic.is_empty() {
         let apic = apic.remove(0);
         match &apic.fields {
             ID3v2FrameFields::AttachedPictureFields {
@@ -99,8 +91,9 @@ pub fn run_test() {
                 picture_type: _,
                 description: _,
             } => {
-                let mut file = File::create("other.jpg").unwrap();
-                file.write_all(&picture_data).unwrap();
+                let mut file = File::create("other.jpg").expect("Couldn't create other.jpg!");
+                file.write_all(picture_data)
+                    .expect("Error writing data to other.jpg!");
             }
             _ => panic!(),
         }

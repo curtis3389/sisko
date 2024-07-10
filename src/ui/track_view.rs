@@ -7,16 +7,23 @@ use std::sync::{Arc, Mutex};
 /// Represents an audio track.
 #[derive(Clone)]
 pub struct TrackView {
+    /// The title of the track.
     pub title: String,
+
+    /// The artist of the track.
     pub artist: String,
+
+    /// The length of the track.
     pub length: String,
+
+    /// The track.
     pub track: Arc<Mutex<Track>>,
 }
 
 impl From<&Arc<Mutex<Track>>> for TrackView {
     fn from(track: &Arc<Mutex<Track>>) -> Self {
         let mutex = track.clone();
-        let track = track.lock().unwrap();
+        let track = track.lock().expect("Failed to lock track mutex!");
         Self {
             title: track.title().unwrap_or("<no title>".to_string()),
             artist: track.artist().unwrap_or("<no artist>".to_string()),

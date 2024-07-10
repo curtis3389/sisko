@@ -1,4 +1,7 @@
+use std::fmt::Display;
+
 use crate::decode_utf16_strings;
+use anyhow::{anyhow, Result};
 
 /// Represents the possible encoding of text in an ID3v2 tag.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -29,21 +32,22 @@ impl TextEncoding {
     /// # use sisko_lib::text_encoding::*;
     /// let bytes = [50, 48, 48, 56, 0, 78, 105, 110, 101, 32, 73, 110, 99, 104, 32, 78, 97, 105, 108, 115, 0];
     ///
-    /// let strings = TextEncoding::Utf8.decode(&bytes);
+    /// let strings = TextEncoding::Utf8.decode(&bytes)?;
     ///
     /// assert_eq!(strings.len(), 2);
     /// assert_eq!(strings[0], "2008");
     /// assert_eq!(strings[1], "Nine Inch Nails");
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn decode(&self, bytes: &[u8]) -> Vec<String> {
-        match self {
-            TextEncoding::Utf16Bom | TextEncoding::Utf16Be => decode_utf16_strings(&bytes).unwrap(),
+    pub fn decode(&self, bytes: &[u8]) -> Result<Vec<String>> {
+        Ok(match self {
+            TextEncoding::Utf16Bom | TextEncoding::Utf16Be => decode_utf16_strings(bytes)?,
             TextEncoding::Iso88591 | TextEncoding::Utf8 => bytes
                 .split(|&b| b == 0)
-                .filter(|b| b.len() != 0)
+                .filter(|b| !b.is_empty())
                 .map(|b| b.iter().map(|&c| c as char).collect())
                 .collect(),
-        }
+        })
     }
 
     /// Gets the index of the end of the next terminator for this encoding in the given bytes.
@@ -95,18 +99,19 @@ impl TextEncoding {
     ///
     /// ```
     /// # use sisko_lib::text_encoding::*;
-    /// assert_eq!(TextEncoding::parse(0), TextEncoding::Iso88591);
-    /// assert_eq!(TextEncoding::parse(1), TextEncoding::Utf16Bom);
-    /// assert_eq!(TextEncoding::parse(2), TextEncoding::Utf16Be);
-    /// assert_eq!(TextEncoding::parse(3), TextEncoding::Utf8);
+    /// assert_eq!(TextEncoding::parse(0)?, TextEncoding::Iso88591);
+    /// assert_eq!(TextEncoding::parse(1)?, TextEncoding::Utf16Bom);
+    /// assert_eq!(TextEncoding::parse(2)?, TextEncoding::Utf16Be);
+    /// assert_eq!(TextEncoding::parse(3)?, TextEncoding::Utf8);
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn parse(byte: u8) -> TextEncoding {
+    pub fn parse(byte: u8) -> Result<TextEncoding> {
         match byte {
-            0 => TextEncoding::Iso88591,
-            1 => TextEncoding::Utf16Bom,
-            2 => TextEncoding::Utf16Be,
-            3 => TextEncoding::Utf8,
-            _ => panic!("Unknown text encoding: {}", byte),
+            0 => Ok(TextEncoding::Iso88591),
+            1 => Ok(TextEncoding::Utf16Bom),
+            2 => Ok(TextEncoding::Utf16Be),
+            3 => Ok(TextEncoding::Utf8),
+            _ => Err(anyhow!("Unknown text encoding: {}", byte)),
         }
     }
 
@@ -128,5 +133,20 @@ impl TextEncoding {
             TextEncoding::Utf16Be => 2,
             TextEncoding::Utf8 => 1,
         }
+    }
+}
+
+impl Display for TextEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TextEncoding::Iso88591 => "ISO-8859-1",
+                TextEncoding::Utf16Bom => "UTF-16 BOM",
+                TextEncoding::Utf16Be => "UTF-16 BE",
+                TextEncoding::Utf8 => "UTF-8",
+            }
+        )
     }
 }

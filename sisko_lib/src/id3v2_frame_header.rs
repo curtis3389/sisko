@@ -1,6 +1,7 @@
 use crate::id3v2_frame_flags::ID3v2FrameFlags;
 use crate::id3v2_version_number::ID3v2VersionNumber;
 use crate::synch_safe_integer::SynchSafeInteger;
+use anyhow::Result;
 
 /// Represents the header of a frame in an ID3v2 tag.
 #[derive(Clone, Debug)]
@@ -30,7 +31,7 @@ impl ID3v2FrameHeader {
     /// let bytes = [b'\x54', b'\x52', b'\x43', b'\x4b', b'\x00', b'\x00', b'\x00', b'\x06', b'\x00', b'\x00'];
     /// let version = ID3v2VersionNumber { major_number: 4, revision_number: 0 };
     ///
-    /// let header = ID3v2FrameHeader::parse(&bytes, &version);
+    /// let header = ID3v2FrameHeader::parse(&bytes, &version)?;
     ///
     /// assert_eq!(header.frame_id, "TRCK");
     /// assert_eq!(header.size, 6);
@@ -47,19 +48,20 @@ impl ID3v2FrameHeader {
     ///     header.flags.format_description.has_data_length_indicator,
     ///     false
     /// );
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn parse(bytes: &[u8], version: &ID3v2VersionNumber) -> ID3v2FrameHeader {
-        let frame_id = String::from_utf8(bytes[0..4].iter().map(|b| *b).collect()).unwrap();
+    pub fn parse(bytes: &[u8], version: &ID3v2VersionNumber) -> Result<ID3v2FrameHeader> {
+        let frame_id = String::from_utf8(bytes[0..4].to_vec())?;
         let size = match version.major_number {
             4 => u32::from(SynchSafeInteger::new(&bytes[4..8])),
             _ => u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
         };
         let flags = ID3v2FrameFlags::parse(&bytes[8..10]);
 
-        ID3v2FrameHeader {
+        Ok(ID3v2FrameHeader {
             frame_id,
             size,
             flags,
-        }
+        })
     }
 }

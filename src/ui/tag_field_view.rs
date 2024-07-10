@@ -13,10 +13,18 @@ pub struct TagFieldView {
     /// The type of the tag the tag field is from.
     pub tag_type: TagType,
 
+    /// The type of the tag field.
     pub tag_field_type: TagFieldType,
 }
 
 impl TagFieldView {
+    /// Returns a new view of a tag field for the given track and types.
+    ///
+    /// # Arguments
+    ///
+    /// * `track` - The track the tag field is in.
+    /// * `tag_type` - The type of the tag the field is in.
+    /// * `field` - The type of the field.
     pub fn new(track: &Arc<Mutex<Track>>, tag_type: &TagType, field: &TagFieldType) -> Self {
         Self {
             track: track.clone(),
@@ -25,19 +33,31 @@ impl TagFieldView {
         }
     }
 
+    /// Returns the tag field referred to by this view.
     pub fn get_field(&self) -> TagField {
-        let track = self.track.lock().unwrap();
+        let track = self.track.lock().expect("Error locking a track mutex!");
         let tag = track
             .tags
             .iter()
-            .filter(|tag| tag.tag_type == self.tag_type)
-            .next()
-            .unwrap();
+            .find(|tag| tag.tag_type == self.tag_type)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Couldn't find {} tag in {}!",
+                    self.tag_type,
+                    track.file.absolute_path.to_string_lossy()
+                )
+            });
         tag.fields
             .iter()
-            .filter(|f| f.tag_field_type() == self.tag_field_type)
-            .next()
-            .unwrap()
+            .find(|f| f.tag_field_type() == self.tag_field_type)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Couldn't find {} field in {} tag in {}!",
+                    self.tag_field_type,
+                    self.tag_type,
+                    track.file.absolute_path.to_string_lossy()
+                )
+            })
             .clone()
     }
 }

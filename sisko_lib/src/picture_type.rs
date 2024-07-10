@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 /// Represents the picture type of an attached picture.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PictureType {
@@ -101,33 +103,34 @@ impl PictureType {
     /// ];
     ///
     /// for (byte, expected) in pairs {
-    ///     assert_eq!(PictureType::parse(byte), expected);
+    ///     assert_eq!(PictureType::parse(byte)?, expected);
     /// }
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn parse(byte: u8) -> PictureType {
+    pub fn parse(byte: u8) -> Result<PictureType> {
         match byte {
-            b'\x00' => PictureType::Other,
-            b'\x01' => PictureType::FileIcon,
-            b'\x02' => PictureType::OtherFileIcon,
-            b'\x03' => PictureType::CoverFront,
-            b'\x04' => PictureType::CoverBack,
-            b'\x05' => PictureType::LeafletPage,
-            b'\x06' => PictureType::Media,
-            b'\x07' => PictureType::LeadArtist,
-            b'\x08' => PictureType::Artist,
-            b'\x09' => PictureType::Conductor,
-            b'\x0A' => PictureType::Band,
-            b'\x0B' => PictureType::Composer,
-            b'\x0C' => PictureType::Lyricist,
-            b'\x0D' => PictureType::RecordingLocation,
-            b'\x0E' => PictureType::DuringRecording,
-            b'\x0F' => PictureType::DuringPerformance,
-            b'\x10' => PictureType::VideoScreenCapture,
-            b'\x11' => PictureType::ABrightColouredFish,
-            b'\x12' => PictureType::Illustration,
-            b'\x13' => PictureType::BandLogoType,
-            b'\x14' => PictureType::PublisherLogoType,
-            _ => panic!("Unknown picture type: {}", byte),
+            b'\x00' => Ok(PictureType::Other),
+            b'\x01' => Ok(PictureType::FileIcon),
+            b'\x02' => Ok(PictureType::OtherFileIcon),
+            b'\x03' => Ok(PictureType::CoverFront),
+            b'\x04' => Ok(PictureType::CoverBack),
+            b'\x05' => Ok(PictureType::LeafletPage),
+            b'\x06' => Ok(PictureType::Media),
+            b'\x07' => Ok(PictureType::LeadArtist),
+            b'\x08' => Ok(PictureType::Artist),
+            b'\x09' => Ok(PictureType::Conductor),
+            b'\x0A' => Ok(PictureType::Band),
+            b'\x0B' => Ok(PictureType::Composer),
+            b'\x0C' => Ok(PictureType::Lyricist),
+            b'\x0D' => Ok(PictureType::RecordingLocation),
+            b'\x0E' => Ok(PictureType::DuringRecording),
+            b'\x0F' => Ok(PictureType::DuringPerformance),
+            b'\x10' => Ok(PictureType::VideoScreenCapture),
+            b'\x11' => Ok(PictureType::ABrightColouredFish),
+            b'\x12' => Ok(PictureType::Illustration),
+            b'\x13' => Ok(PictureType::BandLogoType),
+            b'\x14' => Ok(PictureType::PublisherLogoType),
+            _ => Err(anyhow!("Unknown picture type: {}", byte)),
         }
     }
 }

@@ -65,22 +65,23 @@ pub fn is_bit_set(byte: u8, bit_number: usize) -> bool {
 /// # use sisko_lib::*;
 /// let bytes = [b'\xff', b'\xfe', b'\x32', 0, b'\x30', 0, b'\x30', 0, b'\x38', 0, 0, 0];
 ///
-/// let strings = decode_utf16_strings(&bytes).unwrap();
+/// let strings = decode_utf16_strings(&bytes)?;
 ///
 /// assert_eq!(strings.len(), 1);
 /// assert_eq!(&strings[0], "2008");
+/// # Ok::<(), anyhow::Error>(())
 /// ```
 pub fn decode_utf16_strings(bytes: &[u8]) -> Result<Vec<String>> {
     let (utf16, _, _) = UTF_16BE.decode(bytes);
     let mut strings: Vec<String> = utf16
         .split(|c| c == '\x00')
-        .map(|chars| String::from(chars))
-        .map(|s| s.replace("\u{feff}", ""))
+        .map(String::from)
+        .map(|s| s.replace('\u{feff}', ""))
         .collect();
-    if strings
+    if (strings
         .last()
-        .ok_or(anyhow!("No strings parsed for UTF-16 encoding!"))?
-        == ""
+        .ok_or(anyhow!("No strings parsed for UTF-16 encoding!"))?)
+    .is_empty()
     {
         strings.pop();
     }

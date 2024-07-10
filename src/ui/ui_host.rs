@@ -1,4 +1,6 @@
 use crate::domain::ISiskoService;
+use crate::infrastructure::CursiveExtensions;
+use crate::infrastructure::DIContainerExtensions;
 use crate::ui::*;
 use cursive::event::{Event, Key};
 use cursive::traits::*;
@@ -6,6 +8,8 @@ use cursive::views::{Button, HideableView, LinearLayout, NamedView, Panel, Resiz
 use cursive::{menu, Cursive, CursiveRunnable};
 use cursive_table_view::TableView;
 use syrette::DIContainer;
+
+type TablePanel<Row, Column> = HideableView<Panel<ResizedView<NamedView<TableView<Row, Column>>>>>;
 
 /// Represents the host for the UI.
 pub struct UiHost {
@@ -20,12 +24,11 @@ impl UiHost {
     ///
     /// * `root` - The cursive root to create the UI host with.
     pub fn new(container: DIContainer) -> Self {
-        let cursive = container
-            .get::<dyn ICursive>()
-            .unwrap()
-            .singleton()
-            .unwrap();
-        let mut root = cursive.root().lock().unwrap();
+        let cursive = container.expect_singleton::<dyn ICursive>();
+        let mut root = cursive
+            .root()
+            .lock()
+            .expect("Failed to lock root cursive mutex!");
         Self::add_hotkeys(&mut root);
         Self::setup_menubar(&mut root);
         Self::add_widgets(&mut root);
@@ -34,13 +37,11 @@ impl UiHost {
 
     /// Runs the UI.
     pub fn run(self) {
-        let cursive = self
-            .container
-            .get::<dyn ICursive>()
-            .unwrap()
-            .singleton()
-            .unwrap();
-        let mut root = cursive.root().lock().unwrap();
+        let cursive = self.container.expect_singleton::<dyn ICursive>();
+        let mut root = cursive
+            .root()
+            .lock()
+            .expect("Failed to lock root cursive mutex!");
         root.set_user_data(self.container);
         root.run();
     }
@@ -55,9 +56,7 @@ impl UiHost {
         root.add_global_callback(Event::CtrlChar('b'), |s| {
             s.call_on_name(
                 HIDEABLE_BOTTOM_PANEL,
-                |hideable: &mut HideableView<
-                    Panel<ResizedView<NamedView<TableView<TagFieldView, TagFieldColumn>>>>,
-                >| {
+                |hideable: &mut TablePanel<TagFieldView, TagFieldColumn>| {
                     hideable.set_visible(!hideable.is_visible());
                 },
             );
@@ -65,9 +64,7 @@ impl UiHost {
         root.add_global_callback(Event::CtrlChar('l'), |s| {
             s.call_on_name(
                 HIDEABLE_LEFT_PANEL,
-                |hideable: &mut HideableView<
-                    Panel<ResizedView<NamedView<TableView<TrackView, TrackColumn>>>>,
-                >| {
+                |hideable: &mut TablePanel<TrackView, TrackColumn>| {
                     hideable.set_visible(!hideable.is_visible());
                 },
             );
@@ -75,9 +72,7 @@ impl UiHost {
         root.add_global_callback(Event::CtrlChar('r'), |s| {
             s.call_on_name(
                 HIDEABLE_RIGHT_PANEL,
-                |hideable: &mut HideableView<
-                    Panel<ResizedView<NamedView<TableView<TrackView, TrackColumn>>>>,
-                >| {
+                |hideable: &mut TablePanel<TrackView, TrackColumn>| {
                     hideable.set_visible(!hideable.is_visible());
                 },
             );
@@ -115,17 +110,20 @@ impl UiHost {
                     .call_on_name(
                         CLUSTER_FILE_TABLE,
                         |table_view: &mut TableView<TrackView, TrackColumn>| {
-                            let item = table_view.borrow_item(index).unwrap();
+                            let item = table_view.borrow_item(index).unwrap_or_else(|| {
+                                panic!(
+                                    "Failed to borrow item selected ({}) in {}!",
+                                    index, CLUSTER_FILE_TABLE,
+                                )
+                            });
                             item.clone()
                         },
                     )
-                    .unwrap();
-                let container = s.user_data().unwrap() as &mut DIContainer;
-                let sisko_service = container
-                    .get::<dyn ISiskoService>()
-                    .unwrap()
-                    .transient()
-                    .unwrap();
+                    .unwrap_or_else(|| {
+                        panic!("Failed to call on select lambda on {}!", CLUSTER_FILE_TABLE)
+                    });
+                let container = s.di_container();
+                let sisko_service = container.expect_transient::<dyn ISiskoService>();
                 sisko_service.select_track(&selected_track.track);
             })
             .with_name(CLUSTER_FILE_TABLE);
@@ -153,13 +151,20 @@ impl UiHost {
                     .call_on_name(
                         METADATA_TABLE,
                         |table_view: &mut TableView<TagFieldView, TagFieldColumn>| {
-                            let item = table_view.borrow_item(index).unwrap();
+                            let item = table_view.borrow_item(index).unwrap_or_else(|| {
+                                panic!(
+                                    "Failed to borrow item selected ({}) in {}!",
+                                    index, METADATA_TABLE,
+                                )
+                            });
                             item.clone()
                         },
                     )
-                    .unwrap();
-                let container = s.user_data().unwrap() as &mut DIContainer;
-                let ui = container.get::<dyn Ui>().unwrap().singleton().unwrap();
+                    .unwrap_or_else(|| {
+                        panic!("Failed to call on select lambda on {}!", METADATA_TABLE)
+                    });
+                let container = s.di_container();
+                let ui = container.expect_singleton::<dyn IUi>();
                 ui.open_tag_field_dialog(&selected_field);
             })
             .with_name(METADATA_TABLE);
@@ -176,8 +181,8 @@ impl UiHost {
             .child(hideable_right_panel);
         let bottom_buttons = LinearLayout::horizontal()
             .child(Button::new("Add Folder", |cursive| {
-                let container = cursive.user_data().unwrap() as &mut DIContainer;
-                let ui = container.get::<dyn Ui>().unwrap().singleton().unwrap();
+                let container = cursive.di_container();
+                let ui = container.expect_singleton::<dyn IUi>();
                 ui.open_directory_dialog();
             }))
             .child(Button::new("Add Files", do_nothing))

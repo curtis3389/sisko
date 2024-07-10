@@ -1,6 +1,7 @@
 use crate::id3v2_frame_header::ID3v2FrameHeader;
 use crate::picture_type::PictureType;
 use crate::text_encoding::TextEncoding;
+use anyhow::{anyhow, Result};
 use std::fmt::Debug;
 
 /// Represents the possible sets of fields an ID3v2 frame can have.
@@ -187,19 +188,20 @@ impl ID3v2FrameFields {
     /// };
     /// let bytes = [b'\x00', b'\x31', b'\x2f', b'\x32', b'\x00'];
     ///
-    /// let fields = ID3v2FrameFields::parse(&header, &bytes);
+    /// let fields = ID3v2FrameFields::parse(&header, &bytes)?;
     ///
     /// if let ID3v2FrameFields::TextFields { encoding, text } = fields {
     ///     assert_eq!(encoding, TextEncoding::Iso88591);
     ///     assert_eq!(text.len(), 1);
     ///     assert_eq!(text[0], "1/2");
     /// } else { panic!(); }
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn parse(header: &ID3v2FrameHeader, bytes: &[u8]) -> ID3v2FrameFields {
+    pub fn parse(header: &ID3v2FrameHeader, bytes: &[u8]) -> Result<ID3v2FrameFields> {
         let frame_id = header.frame_id.as_str();
         let fields: ID3v2FrameFields = if frame_id.starts_with('T') && frame_id != "TXXX" {
-            let encoding = TextEncoding::parse(bytes[0]);
-            let text = encoding.decode(&bytes[1..]);
+            let encoding = TextEncoding::parse(bytes[0])?;
+            let text = encoding.decode(&bytes[1..])?;
             ID3v2FrameFields::TextFields { encoding, text }
         } else if frame_id.starts_with('W') && frame_id != "WXXX" {
             ID3v2FrameFields::UrlFields {}
@@ -207,15 +209,27 @@ impl ID3v2FrameFields {
             match frame_id {
                 "AENC" => ID3v2FrameFields::AudioEncryptionFields {},
                 "APIC" => {
-                    let encoding = TextEncoding::parse(bytes[0]);
-                    let index = 1 + TextEncoding::Iso88591.next_terminator(&bytes[1..]).unwrap();
-                    let mime_type = TextEncoding::Iso88591.decode(&bytes[1..index]).remove(0);
-                    let picture_type = PictureType::parse(bytes[index + 1]);
+                    let encoding = TextEncoding::parse(bytes[0])?;
+                    let index =
+                        1 + TextEncoding::Iso88591
+                            .next_terminator(&bytes[1..])
+                            .ok_or(anyhow!(
+                                "Couldn't find an ISO-8859-1 string terminator in {} frame bytes!",
+                                frame_id
+                            ))?;
+                    let mime_type = TextEncoding::Iso88591.decode(&bytes[1..index])?.remove(0);
+                    let picture_type = PictureType::parse(bytes[index + 1])?;
                     let next_index = index
                         + 3
-                        + encoding.next_terminator(&bytes[index + 2..]).unwrap()
+                        + encoding
+                            .next_terminator(&bytes[index + 2..])
+                            .ok_or(anyhow!(
+                                "Couldn't find a string terminator for {} in {} frame bytes!",
+                                encoding,
+                                frame_id
+                            ))?
                         + encoding.terminator_width();
-                    let description = encoding.decode(&bytes[index + 2..next_index]).remove(0);
+                    let description = encoding.decode(&bytes[index + 2..next_index])?.remove(0);
                     let picture_data = bytes[next_index..].to_vec();
 
                     ID3v2FrameFields::AttachedPictureFields {
@@ -228,9 +242,9 @@ impl ID3v2FrameFields {
                 }
                 "ASPI" => ID3v2FrameFields::AudioPointSeekIndexFields {},
                 "COMM" => {
-                    let encoding = TextEncoding::parse(bytes[0]);
-                    let language = TextEncoding::Iso88591.decode(&bytes[1..4]).remove(0);
-                    let mut text = encoding.decode(&bytes[4..]);
+                    let encoding = TextEncoding::parse(bytes[0])?;
+                    let language = TextEncoding::Iso88591.decode(&bytes[1..4])?.remove(0);
+                    let mut text = encoding.decode(&bytes[4..])?;
                     let description = text.remove(0);
 
                     ID3v2FrameFields::CommentsFields {
@@ -262,8 +276,8 @@ impl ID3v2FrameFields {
                 "SYLT" => ID3v2FrameFields::SynchronisedLyricsFields {},
                 "SYTC" => ID3v2FrameFields::SynchronisedTempCodesFields {},
                 "TXXX" => {
-                    let encoding = TextEncoding::parse(bytes[0]);
-                    let mut value = encoding.decode(&bytes[1..]);
+                    let encoding = TextEncoding::parse(bytes[0])?;
+                    let mut value = encoding.decode(&bytes[1..])?;
                     let description = value.remove(0);
                     ID3v2FrameFields::UserDefinedTextFields {
                         encoding,
@@ -279,7 +293,7 @@ impl ID3v2FrameFields {
                         .take(1)
                         .collect::<Vec<(usize, &u8)>>()[0];
                     ID3v2FrameFields::UniqueFileIdentifierFields {
-                        owner_id: TextEncoding::Iso88591.decode(&bytes[..index]).remove(0),
+                        owner_id: TextEncoding::Iso88591.decode(&bytes[..index])?.remove(0),
                         id: bytes[(index + 1)..].to_vec(),
                     }
                 }
@@ -291,6 +305,6 @@ impl ID3v2FrameFields {
                 },
             }
         };
-        fields
+        Ok(fields)
     }
 }

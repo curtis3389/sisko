@@ -12,7 +12,12 @@ chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 cursive = "0.20.0"
 cursive_table_view = "0.14"
+itertools = "0.13.0"
 mime_guess = "2.0"
 sisko_lib = { path = "./sisko_lib" }
 syrette = { version = "0.5", features = ["async"] }
 uuid = { version = "1.8", features = ["v4", "fast-rng", "v5"] }
+
+[dependencies.anyhow]
+version = "1.0"
+features = ["backtrace"]

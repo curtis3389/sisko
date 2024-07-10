@@ -3,7 +3,7 @@ use crate::ui::TagFieldView;
 use std::sync::{Arc, Mutex};
 
 /// Represents the UI.
-pub trait Ui {
+pub trait IUi {
     /// Adds the given track to the cluster file table.
     ///
     /// # Arguments

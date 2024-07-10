@@ -1,6 +1,7 @@
 use crate::id3v2_frame_fields::ID3v2FrameFields;
 use crate::id3v2_frame_header::ID3v2FrameHeader;
 use crate::id3v2_version_number::ID3v2VersionNumber;
+use anyhow::Result;
 
 /// Represents a frame in an ID3v2 tag.
 /// This is what is common referred to as a "tag" (e.g. the artist tag).
@@ -31,7 +32,7 @@ impl ID3v2Frame {
     /// let bytes = [b'\x54', b'\x50', b'\x4f', b'\x53', b'\x00', b'\x00', b'\x00', b'\x05', b'\x00', b'\x00', b'\x00', b'\x31', b'\x2f', b'\x32', b'\x00'];
     /// let version = ID3v2VersionNumber { major_number: 4, revision_number: 0 };
     ///
-    /// let frame = ID3v2Frame::parse(&bytes, &version);
+    /// let frame = ID3v2Frame::parse(&bytes, &version)?;
     ///
     /// assert_eq!(frame.header.frame_id, "TPOS");
     /// assert_eq!(frame.header.size, 5);
@@ -42,12 +43,13 @@ impl ID3v2Frame {
     /// } else {
     ///     panic!();
     /// }
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn parse(bytes: &[u8], version: &ID3v2VersionNumber) -> ID3v2Frame {
-        let header = ID3v2FrameHeader::parse(&bytes[..10], version);
-        let fields = ID3v2FrameFields::parse(&header, &bytes[10..(header.size as usize + 10)]);
+    pub fn parse(bytes: &[u8], version: &ID3v2VersionNumber) -> Result<ID3v2Frame> {
+        let header = ID3v2FrameHeader::parse(&bytes[..10], version)?;
+        let fields = ID3v2FrameFields::parse(&header, &bytes[10..(header.size as usize + 10)])?;
 
-        ID3v2Frame { header, fields }
+        Ok(ID3v2Frame { header, fields })
     }
 
     /// Parses all of the ID3v2 frames for the given ID3v2 version from the given bytes.
@@ -67,7 +69,7 @@ impl ID3v2Frame {
     /// let bytes = [b'\x54', b'\x50', b'\x4f', b'\x53', b'\x00', b'\x00', b'\x00', b'\x05', b'\x00', b'\x00', b'\x00', b'\x31', b'\x2f', b'\x32', b'\x00'];
     /// let version = ID3v2VersionNumber { major_number: 4, revision_number: 0 };
     ///
-    /// let mut frames = ID3v2Frame::parse_all(&bytes, &version);
+    /// let mut frames = ID3v2Frame::parse_all(&bytes, &version)?;
     ///
     /// let frame = frames.remove(0);
     /// assert_eq!(frame.header.frame_id, "TPOS");
@@ -79,12 +81,13 @@ impl ID3v2Frame {
     /// } else {
     ///     panic!();
     /// }
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
-    pub fn parse_all(bytes: &[u8], version: &ID3v2VersionNumber) -> Vec<ID3v2Frame> {
+    pub fn parse_all(bytes: &[u8], version: &ID3v2VersionNumber) -> Result<Vec<ID3v2Frame>> {
         let mut frames: Vec<ID3v2Frame> = Vec::new();
         let mut index = 0;
         while index < bytes.len() {
-            let frame = ID3v2Frame::parse(&bytes[index..], version);
+            let frame = ID3v2Frame::parse(&bytes[index..], version)?;
 
             if frame.header.size == 0 {
                 break;
@@ -93,6 +96,6 @@ impl ID3v2Frame {
             index += 10 + (frame.header.size as usize);
             frames.push(frame);
         }
-        frames
+        Ok(frames)
     }
 }

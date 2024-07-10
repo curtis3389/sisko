@@ -56,29 +56,30 @@ impl ID3v2Tag {
     /// };
     /// let bytes = [b'\x54', b'\x50', b'\x4f', b'\x53', b'\x00', b'\x00', b'\x00', b'\x05', b'\x00', b'\x00', b'\x00', b'\x31', b'\x2f', b'\x32', b'\x00'];
     ///
-    /// let tag = ID3v2Tag::parse(header, &bytes, None);
+    /// let tag = ID3v2Tag::parse(header, &bytes, None)?;
     ///
     /// assert_eq!(tag.extended_header.is_some(), false);
     /// assert_eq!(tag.frames.len(), 1);
     /// assert_eq!(tag.padding, 0);
     /// assert_eq!(tag.footer.is_some(), false);
+    /// # Ok::<(), anyhow::Error>(())
     /// ```
     pub fn parse(
         header: ID3v2Header,
         middle_bytes: &[u8],
         footer: Option<ID3v2Footer>,
-    ) -> ID3v2Tag {
+    ) -> Result<ID3v2Tag> {
         let extended_header = match header.flags.has_extended_header {
-            true => Some(ID3v2ExtendedHeader::parse(&middle_bytes[..])),
+            true => Some(ID3v2ExtendedHeader::parse(middle_bytes)),
             false => None,
         };
         let frames = ID3v2Frame::parse_all(
             match extended_header {
-                None => &middle_bytes[..],
+                None => middle_bytes,
                 Some(ref extended_header) => &middle_bytes[(extended_header.size as usize)..],
             },
             &header.version,
-        );
+        )?;
         let padding = header.size
             - match extended_header {
                 None => 0,
@@ -86,13 +87,13 @@ impl ID3v2Tag {
             }
             - frames.iter().map(|f| f.header.size + 10).sum::<u32>();
 
-        ID3v2Tag {
+        Ok(ID3v2Tag {
             header,
             extended_header,
             frames,
             padding,
             footer,
-        }
+        })
     }
 
     /// Reads the ID3v2 tag from the file with the given path
@@ -114,18 +115,18 @@ impl ID3v2Tag {
     pub fn read_from_reader<R: Read + Seek>(reader: &mut R) -> Result<ID3v2Tag> {
         let mut header_bytes: [u8; 10] = [0; 10];
         reader.read_exact(&mut header_bytes)?;
-        let header = ID3v2Header::parse(&header_bytes);
+        let header = ID3v2Header::parse(&header_bytes)?;
         let mut middle_bytes: Vec<u8> = vec![0; header.size as usize];
         reader.read_exact(&mut middle_bytes)?;
         let footer = match header.flags.has_footer {
             true => {
                 let mut footer_bytes: [u8; 10] = [0; 10];
                 reader.read_exact(&mut footer_bytes)?;
-                Some(ID3v2Footer::parse(&footer_bytes))
+                Some(ID3v2Footer::parse(&footer_bytes)?)
             }
             false => None,
         };
 
-        Ok(ID3v2Tag::parse(header, &middle_bytes[..], footer))
+        ID3v2Tag::parse(header, &middle_bytes[..], footer)
     }
 }

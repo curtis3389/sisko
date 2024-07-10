@@ -1,5 +1,5 @@
 use mime_guess::{self, mime};
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Represents the possible file types.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Ord, PartialOrd)]
@@ -38,13 +38,13 @@ impl FileType {
     }
 }
 
-impl From<&PathBuf> for FileType {
+impl From<&Path> for FileType {
     /// Returns the FileType of the given path.
     ///
     /// # Arguments
     ///
     /// * `path` - The path to the file to get the type of.
-    fn from(path: &PathBuf) -> Self {
+    fn from(path: &Path) -> Self {
         if path.is_file() {
             let guess = mime_guess::from_path(path);
             match guess.first() {
