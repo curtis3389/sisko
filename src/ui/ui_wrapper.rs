@@ -175,7 +175,7 @@ where
                 let container = s.di_container();
                 let file_service = container.expect_singleton::<dyn IFileService>();
                 let files: Vec<FileView> = file_service
-                    .get_files_in_dir(&selected_file.path, dialog_type)
+                    .get_files_in_dir(&selected_file.absolute_path, dialog_type)
                     .unwrap_or(vec![]) // TODO: log a warning, maybe add an error item to list
                     .iter()
                     .map(FileView::from)

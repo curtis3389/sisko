@@ -29,15 +29,12 @@ impl TrackService {
             tracks: Mutex::new(HashMap::new()),
         }
     }
-}
 
-impl ITrackService for TrackService {
-    fn get(&self, file: &File) -> Result<Arc<Mutex<Track>>> {
-        let tracks = self
+    fn get_clone(&self, file: &File) -> Result<Arc<Mutex<Track>>> {
+        Ok(self
             .tracks
             .lock()
-            .map_err(|_| anyhow!("Failed to lock tracks mutex!"))?;
-        Ok(tracks
+            .map_err(|_| anyhow!("Failed to lock tracks mutex!"))?
             .get(&file.absolute_path)
             .ok_or(anyhow!(
                 "File not found in tracks: {}!",
@@ -46,7 +43,15 @@ impl ITrackService for TrackService {
             .clone())
     }
 
-    fn load(&self, file: &File) -> Result<Arc<Mutex<Track>>> {
+    fn is_loaded(&self, file: &File) -> Result<bool> {
+        Ok(self
+            .tracks
+            .lock()
+            .map_err(|_| anyhow!("Error locking tracks mutex!"))?
+            .contains_key(&file.absolute_path))
+    }
+
+    fn load(&self, file: &File) -> Result<()> {
         let tags = self.tag_service.get_all(file);
         let track = Track::new(file.clone(), tags);
         let track = Arc::new(Mutex::new(track));
@@ -54,6 +59,15 @@ impl ITrackService for TrackService {
             .lock()
             .map_err(|_| anyhow!("Failed to lock tracks mutex!"))?
             .insert(file.absolute_path.clone(), track.clone());
-        Ok(track)
+        Ok(())
+    }
+}
+
+impl ITrackService for TrackService {
+    fn get(&self, file: &File) -> Result<Arc<Mutex<Track>>> {
+        if !self.is_loaded(file)? {
+            self.load(file)?;
+        }
+        self.get_clone(file)
     }
 }

@@ -5,19 +5,15 @@ use chrono::DateTime;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use syrette::injectable;
-use uuid::Uuid;
 
 /// Represents a service for working with files backed by the native filesystem.
 pub struct FileService {
     /// The files loaded into the service.
-    files: Mutex<HashMap<Uuid, Arc<File>>>,
-
-    /// The ID of the file ID namespace.
-    namespace_id: Uuid,
+    files: Mutex<HashMap<PathBuf, Arc<File>>>,
 }
 
 #[injectable(IFileService)]
@@ -26,8 +22,67 @@ impl FileService {
     pub fn new() -> Self {
         FileService {
             files: Mutex::new(HashMap::new()),
-            namespace_id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, b"files.sisko.org"),
         }
+    }
+
+    /// Returns a clone of the file with the given absolute path.
+    fn get_clone(&self, path: &Path) -> Result<Arc<File>> {
+        Ok(self
+            .files
+            .lock()
+            .map_err(|_| anyhow!("Error locking files mutex!"))?
+            .get(path)
+            .ok_or(anyhow!(
+                "Error getting file with path \"{}\"!",
+                path.to_string_lossy()
+            ))?
+            .clone())
+    }
+
+    /// Returns whether the file with the given absolute path is loaded into the service.
+    fn is_loaded(&self, path: &Path) -> Result<bool> {
+        Ok(self
+            .files
+            .lock()
+            .map_err(|_| anyhow!("Error locking files mutex!"))?
+            .contains_key(path))
+    }
+
+    /// Loads the file with the given path into the service.
+    fn load(&self, path: &Path) -> Result<()> {
+        let metadata = path.metadata().ok();
+        let file_type = Some(FileType::from(path));
+        let file = File {
+            absolute_path: path.to_path_buf(),
+            name: path
+                .file_name()
+                .map(|name| name.to_os_string())
+                .expect("Every file looked at should have a filename!")
+                .into_string()
+                .unwrap_or(String::from("<invalid unicode>")),
+            size: metadata.as_ref().map(|metadata| metadata.len()),
+            file_type,
+            date_modified: match &metadata {
+                Some(metadata) => match metadata.modified() {
+                    Ok(system_time) => match system_time.duration_since(SystemTime::UNIX_EPOCH) {
+                        Ok(duration) => DateTime::from_timestamp(
+                            duration.as_secs() as i64,
+                            duration.subsec_nanos(),
+                        ),
+                        Err(_) => None,
+                    },
+                    Err(_) => None,
+                },
+                None => None,
+            },
+        };
+        let file = Arc::new(file);
+        let mut files = self
+            .files
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock the files mutex!"))?;
+        files.insert(file.absolute_path.clone(), file.clone());
+        Ok(())
     }
 }
 
@@ -38,15 +93,12 @@ impl Default for FileService {
 }
 
 impl IFileService for FileService {
-    fn get(&self, id: &Uuid) -> Result<Arc<File>> {
-        let file = self
-            .files
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock files mutex!"))?
-            .get(id)
-            .ok_or(anyhow!("Couldn't find file with the id {}!", id))?
-            .clone();
-        Ok(file)
+    fn get(&self, path: &Path) -> Result<Arc<File>> {
+        let path = fs::canonicalize(path)?;
+        if !self.is_loaded(&path)? {
+            self.load(&path)?;
+        }
+        self.get_clone(&path)
     }
 
     fn get_files_in_dir(&self, path: &Path, dialog_type: FileDialogType) -> Result<Vec<Arc<File>>> {
@@ -54,7 +106,7 @@ impl IFileService for FileService {
         let files: Vec<Arc<File>> = paths
             .map(|dir_result| -> Result<Arc<File>> {
                 let dir = dir_result?;
-                self.load(&dir.path())
+                self.get(&dir.path())
             })
             .try_collect()?;
         let mut files: Vec<Arc<File>> = files
@@ -80,16 +132,11 @@ impl IFileService for FileService {
             files.insert(
                 0,
                 Arc::new(File {
-                    id: Uuid::new_v5(
-                        &self.namespace_id,
-                        absolute_path.to_string_lossy().as_bytes(),
-                    ),
                     absolute_path,
                     name: "..".to_string(),
                     size: None,
                     file_type: Some(FileType::Directory),
                     date_modified: None,
-                    path,
                 }),
             );
         }
@@ -115,52 +162,10 @@ impl IFileService for FileService {
             })
             .filter(|f| f.name != "..");
         let sub_files: Vec<Vec<Arc<File>>> = directories
-            .map(|f| self.get_files_in_dir_recursive(&f.path))
+            .map(|f| self.get_files_in_dir_recursive(&f.absolute_path))
             .try_collect()?;
         let mut sub_files: Vec<Arc<File>> = sub_files.into_iter().flatten().collect();
         audio_files.append(&mut sub_files);
         Ok(audio_files)
-    }
-
-    fn load(&self, path: &Path) -> Result<Arc<File>> {
-        let metadata = path.metadata().ok();
-        let file_type = Some(FileType::from(path));
-        let absolute_path = fs::canonicalize(path)?;
-        let file = File {
-            id: Uuid::new_v5(
-                &self.namespace_id,
-                absolute_path.to_string_lossy().as_bytes(),
-            ),
-            absolute_path,
-            name: path
-                .file_name()
-                .map(|name| name.to_os_string())
-                .expect("Every file looked at should have a filename!")
-                .into_string()
-                .unwrap_or(String::from("<invalid unicode>")),
-            size: metadata.as_ref().map(|metadata| metadata.len()),
-            file_type,
-            date_modified: match &metadata {
-                Some(metadata) => match metadata.modified() {
-                    Ok(system_time) => match system_time.duration_since(SystemTime::UNIX_EPOCH) {
-                        Ok(duration) => DateTime::from_timestamp(
-                            duration.as_secs() as i64,
-                            duration.subsec_nanos(),
-                        ),
-                        Err(_) => None,
-                    },
-                    Err(_) => None,
-                },
-                None => None,
-            },
-            path: path.to_path_buf(),
-        };
-        let file = Arc::new(file);
-        let mut files = self
-            .files
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock the files mutex!"))?;
-        files.insert(file.id, file.clone());
-        Ok(file)
     }
 }

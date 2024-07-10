@@ -1,13 +1,10 @@
 use crate::domain::FileType;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
-use uuid::Uuid;
 
 /// Represents a file that the program has looked at.
 #[derive(Clone, Debug)]
 pub struct File {
-    /// The ID of the file.
-    pub id: Uuid,
     /// The absolute path of the file.
     pub absolute_path: PathBuf,
     /// The name of the file.
@@ -18,6 +15,4 @@ pub struct File {
     pub file_type: Option<FileType>,
     /// The date the file was last modified.
     pub date_modified: Option<DateTime<Utc>>,
-    /// The file's path.
-    pub path: PathBuf,
 }

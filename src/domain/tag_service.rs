@@ -22,7 +22,7 @@ impl Default for TagService {
 impl ITagService for TagService {
     fn get_all(&self, file: &File) -> Vec<Tag> {
         let mut tags = vec![];
-        if let Ok(id3v2) = ID3v2Tag::read_from_path(&file.path) {
+        if let Ok(id3v2) = ID3v2Tag::read_from_path(&file.absolute_path) {
             tags.push(Tag::from(&id3v2));
         }
         tags

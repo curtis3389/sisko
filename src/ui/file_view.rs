@@ -40,7 +40,7 @@ impl From<&Arc<File>> for FileView {
             date_modified: file
                 .date_modified
                 .map_or(String::new(), |date| date.to_string()),
-            path: String::from(file.path.to_string_lossy()),
+            path: String::from(file.absolute_path.to_string_lossy()),
             file: file.clone(),
         }
     }

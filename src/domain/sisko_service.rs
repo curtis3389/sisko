@@ -42,10 +42,12 @@ impl SiskoService {
 
 impl ISiskoService for SiskoService {
     fn add_folder(&self, file: Arc<File>) -> Result<()> {
-        let files = self.file_service.get_files_in_dir_recursive(&file.path)?;
+        let files = self
+            .file_service
+            .get_files_in_dir_recursive(&file.absolute_path)?;
         let tracks: Vec<Arc<Mutex<Track>>> = files
             .iter()
-            .map(|f| self.track_service.load(f))
+            .map(|f| self.track_service.get(f))
             .try_collect()?;
         tracks.into_iter().for_each(|t| self.ui.add_cluster_file(t));
         Ok(())

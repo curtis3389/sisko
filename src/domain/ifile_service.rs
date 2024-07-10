@@ -3,16 +3,15 @@ use crate::ui::FileDialogType;
 use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
-use uuid::Uuid;
 
 /// Represents a service for working with files.
 pub trait IFileService {
-    /// Gets the file with the given id..
+    /// Gets the file with the given path.
     ///
     /// # Arguments
     ///
-    /// * `id` - The id of the file to get.
-    fn get(&self, id: &Uuid) -> Result<Arc<File>>;
+    /// * `path` - The path of the file to get.
+    fn get(&self, path: &Path) -> Result<Arc<File>>;
 
     /// Returns a vector of files under the given path for the given file/folder
     /// dialog type.
@@ -35,11 +34,4 @@ pub trait IFileService {
     ///
     /// * `path` - The path to the directory to search for tracks.
     fn get_files_in_dir_recursive(&self, path: &Path) -> Result<Vec<Arc<File>>>;
-
-    /// Loads and returns the file at the given path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path of the file to load.
-    fn load(&self, path: &Path) -> Result<Arc<File>>;
 }
