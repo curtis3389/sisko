@@ -128,7 +128,7 @@ impl IFileService for FileService {
 
         if let Some(parent_path) = path.parent() {
             let path = parent_path.to_path_buf();
-            let absolute_path = fs::canonicalize(&path)?;
+            let absolute_path = fs::canonicalize(path)?;
             files.insert(
                 0,
                 Arc::new(File {

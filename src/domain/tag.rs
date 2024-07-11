@@ -66,7 +66,6 @@ impl Tag {
 
 impl From<&ID3v2Tag> for Tag {
     fn from(id3v2: &ID3v2Tag) -> Self {
-        let fields = id3v2.frames.iter().map(TagField::from).collect();
-        Tag::new(TagType::ID3v2, fields)
+        Tag::new(TagType::ID3v2, TagField::parse_all(&id3v2.frames))
     }
 }
