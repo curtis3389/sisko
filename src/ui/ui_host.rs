@@ -88,7 +88,14 @@ impl UiHost {
         root.menubar()
             .add_subtree("File", menu::Tree::new().leaf("Quit", Cursive::quit))
             .add_subtree("Edit", menu::Tree::new())
-            .add_subtree("View", menu::Tree::new())
+            .add_subtree(
+                "View",
+                menu::Tree::new().leaf("Logs", |cursive| {
+                    let container = cursive.di_container();
+                    let ui = container.expect_singleton::<dyn IUi>();
+                    ui.open_logs();
+                }),
+            )
             .add_subtree("Options", menu::Tree::new())
             .add_subtree("Tools", menu::Tree::new())
             .add_subtree("Help", menu::Tree::new());
@@ -125,6 +132,27 @@ impl UiHost {
                 let container = s.di_container();
                 let sisko_service = container.expect_transient::<dyn ISiskoService>();
                 sisko_service.select_track(&selected_track.track);
+            })
+            .on_submit(|s: &mut Cursive, _row: usize, index: usize| {
+                let selected_track = s
+                    .call_on_name(
+                        CLUSTER_FILE_TABLE,
+                        |table_view: &mut TableView<TrackView, TrackColumn>| {
+                            let item = table_view.borrow_item(index).unwrap_or_else(|| {
+                                panic!(
+                                    "Failed to borrow item selected ({}) in {}!",
+                                    index, CLUSTER_FILE_TABLE,
+                                )
+                            });
+                            item.clone()
+                        },
+                    )
+                    .unwrap_or_else(|| {
+                        panic!("Failed to call on select lambda on {}!", CLUSTER_FILE_TABLE)
+                    });
+                let container = s.di_container();
+                let ui = container.expect_singleton::<dyn IUi>();
+                ui.open_track_dialog(&selected_track);
             })
             .with_name(CLUSTER_FILE_TABLE);
 

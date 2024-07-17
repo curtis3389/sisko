@@ -1,4 +1,6 @@
-use crate::domain::{File, FileType, IFileService, ISiskoService, TagField, Track};
+use crate::domain::{File, FileType, IFileService, ILogHistory, ISiskoService, TagField, Track};
+use crate::infrastructure::acoustid::IAcoustIdService;
+use crate::infrastructure::musicbrainz::IMusicBrainzService;
 use crate::infrastructure::CursiveExtensions;
 use crate::infrastructure::DIContainerExtensions;
 use crate::ui::*;
@@ -6,9 +8,10 @@ use anyhow::{anyhow, Result};
 use cursive::reexports::enumset::enum_set;
 use cursive::theme::{ColorStyle, Effect, Style};
 use cursive::traits::*;
-use cursive::views::{Dialog, EditView, LinearLayout, TextView};
+use cursive::views::{Button, Dialog, EditView, LinearLayout, TextView};
 use cursive::{CbSink, Cursive};
 use cursive_table_view::TableView;
+use log::{error, info};
 use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -76,11 +79,28 @@ impl IUi for UiWrapper {
             .expect("Error sending callback to open directory dialog!");
     }
 
+    fn open_logs(&self) {
+        self.cb_sink
+            .send(Box::new(move |s: &mut Cursive| {
+                new_logs_dialog(s);
+            }))
+            .unwrap();
+    }
+
     fn open_tag_field_dialog(&self, field: &TagFieldView) {
         let field = field.clone();
         self.cb_sink
             .send(Box::new(move |s: &mut Cursive| {
                 tag_field_dialog(s, &field);
+            }))
+            .expect("Error sending callback to open tag field dialog!");
+    }
+
+    fn open_track_dialog(&self, track: &TrackView) {
+        let track = track.clone();
+        self.cb_sink
+            .send(Box::new(move |s: &mut Cursive| {
+                track_dialog(s, &track);
             }))
             .expect("Error sending callback to open tag field dialog!");
     }
@@ -108,6 +128,19 @@ impl IUi for UiWrapper {
             }))
             .unwrap_or_else(|_| panic!("Error sending callback to set {}", METADATA_TABLE,));
     }
+}
+
+fn new_logs_dialog(s: &mut Cursive) {
+    let container = s.di_container();
+    let log_history = container.expect_singleton::<dyn ILogHistory>();
+    let text_view = TextView::new(log_history.logs().lock().unwrap().join(""));
+    let dialog = Dialog::around(text_view)
+        .title("Logs")
+        .button("Close", |s| {
+            s.pop_layer();
+        });
+
+    s.add_layer(dialog);
 }
 
 /// Opens a new file/folder selection dialog of the given type and calls the
@@ -315,4 +348,108 @@ fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
             s.pop_layer();
         });
     s.add_layer(dialog);
+}
+
+/// Opens a track actions dialog for the given track view.
+///
+/// # Arguments
+///
+/// * `s` - The Cursive to open the dialog with.
+/// * `view` - The track view to open the dialog for.
+fn track_dialog(s: &mut Cursive, view: &TrackView) {
+    /*let track = view.track.clone();
+            let tag_type = view.tag_type.clone();
+            let field = view.get_field();
+            let title = field.display_name();
+            let name = LinearLayout::horizontal()
+                .child(TextView::new(String::from("Tag: ")).style(Style {
+                    effects: enum_set!(Effect::Bold),
+                    color: ColorStyle::inherit_parent(),
+                }))
+                .child(TextView::new(title.clone()));
+            let value = LinearLayout::horizontal()
+                .child(
+                    TextView::new(String::from("Original Value: ")).style(Style {
+                        effects: enum_set!(Effect::Bold),
+                        color: ColorStyle::inherit_parent(),
+                    }),
+                )
+                .child(TextView::new(field.display_value()));
+            let mut new_value =
+                LinearLayout::horizontal().child(TextView::new(String::from("New Value: ")).style(Style {
+                    effects: enum_set!(Effect::Bold),
+                    color: ColorStyle::inherit_parent(),
+                }));
+            match &field {
+                TagField::Binary(_, _, _new_field_value) => todo!("add file selector"),
+                TagField::Text(_, _, new_field_value) => new_value.add_child(
+                    EditView::new()
+                        .content(new_field_value.clone().unwrap_or(String::new()))
+                        .with_name(NEW_FIELD_VALUE)
+                        .fixed_width(32),
+                ),
+                TagField::Unknown(_, _) => new_value.add_child(TextView::new(String::new())),
+    }*/
+    let track = view.track.clone();
+    let lookup = Button::new("Lookup", |_| {});
+    let scan = Button::new("Scan", move |s| scan_file(s, &track));
+    let save = Button::new("Save", |_| {});
+    let remove = Button::new("Remove", |_| {});
+    let layout = LinearLayout::vertical()
+        .child(lookup)
+        .child(scan)
+        .child(save)
+        .child(remove);
+    let dialog = Dialog::around(layout)
+        .title(view.title.clone())
+        /*.button("Save", move |s: &mut Cursive| {
+            let new_field_value = s
+                .call_on_name(NEW_FIELD_VALUE, |edit_view: &mut EditView| {
+                    edit_view.get_content().as_ref().clone()
+                })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to call on save lambda to get edit field content in {}!",
+                        NEW_FIELD_VALUE
+                    )
+                });
+            let field = field.clone();
+            let field = match field {
+                TagField::Binary(_, _, _new_field_value) => todo!("handle selected file"),
+                TagField::Text(tag_field_type, value, _) => {
+                    TagField::Text(tag_field_type, value, Some(new_field_value))
+                }
+                TagField::Unknown(_, _) => field,
+            };
+            let mut track = track.lock().expect("Failed to lock track mutex!");
+            track.update_tag_field(&tag_type, field);
+            s.pop_layer();
+        })*/
+        .button("Cancel", |s| {
+            s.pop_layer();
+        });
+    s.add_layer(dialog);
+}
+
+pub fn scan_file(s: &mut Cursive, track: &Arc<Mutex<Track>>) {
+    let container = s.di_container();
+    let acoustid = container.expect_singleton::<dyn IAcoustIdService>();
+    let musicbrainz = container.expect_singleton::<dyn IMusicBrainzService>();
+    let track = track.lock().unwrap();
+    let fingerprint = acoustid.get_fingerprint(&track.file.absolute_path).unwrap();
+    let recordingid = acoustid.lookup_fingerprint(&fingerprint).unwrap()[0].recordings[0]
+        .id
+        .clone();
+    let recording = musicbrainz.lookup_recording(&recordingid).unwrap();
+    let release_id = &recording.releases[0].id;
+    match musicbrainz.lookup_release(release_id) {
+        Ok(release) => info!("{} {}", release.title, release.media[0].track_count),
+        Err(e) => {
+            error!("{}", e);
+            let root_cause = e.root_cause();
+            error!("root cause: {root_cause}");
+        }
+    }
+    // TODO: pair track to musicbrainz
+    // when paired, remove track from cluster table and update album row to paired
 }
