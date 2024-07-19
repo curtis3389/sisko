@@ -18,7 +18,7 @@ mime_guess = "2.0"
 regex = "1.10"
 serde_json = "1.0"
 sisko_lib = { path = "./sisko_lib" }
-syrette = { version = "0.5", features = ["async"] }
+tokio = { version = "1", features = ["full"] }
 
 [dependencies.anyhow]
 version = "1.0"

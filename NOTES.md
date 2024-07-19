@@ -4,11 +4,11 @@
 - tag field: a single key-value in a tag (e.g. Artist: Joy Division)
 - tag field change: a change to a tag field (e.g. add album artist tag field)
 - tag change: a change to a tag as a whole (e.g. change from v2.3.0 to v2.4.0)
-- track pairing: a pairing of a track to a set of track metadata
-- track metadata: metadata about a track from MusicBrainz
-- album metadata: metadata about an album from MusicBrainz
+- track pairing: a pairing of a track to a the metadata of a particular recording-release combo
+- track metadata: metadata about a track from MusicBrainz (i.e. recording metadata)
+- album metadata: metadata about an album from MusicBrainz (i.e. release metadata)
 - left pane: contains tracks that haven't been paired
-- right pane: contains track pairings
+- right pane: contains releases with track pairings
 - bottom pane: contains tag field changes
 
 ```rust
@@ -54,3 +54,9 @@ events:
 * user changed a field's value
 * user paired a track to metadata
 * user saved a file
+
+scan file:
+1. fingerprint file
+1. get recording id for fingerprint from acoustid
+1. load recording and release metadata into memory
+1. pair file with a particular release

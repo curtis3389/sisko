@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 
 /// Represents an audio track.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TrackView {
     /// The title of the track.
     pub title: String,

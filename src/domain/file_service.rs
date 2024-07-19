@@ -1,4 +1,4 @@
-use crate::domain::{File, FileType, IFileService};
+use crate::domain::{File, FileType};
 use crate::ui::FileDialogType;
 use anyhow::{anyhow, Result};
 use chrono::DateTime;
@@ -6,9 +6,8 @@ use itertools::Itertools;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
-use syrette::injectable;
 
 /// Represents a service for working with files backed by the native filesystem.
 pub struct FileService {
@@ -16,8 +15,12 @@ pub struct FileService {
     files: Mutex<HashMap<PathBuf, Arc<File>>>,
 }
 
-#[injectable(IFileService)]
 impl FileService {
+    pub fn instance() -> &'static Self {
+        static INSTANCE: OnceLock<FileService> = OnceLock::new();
+        INSTANCE.get_or_init(Self::new)
+    }
+
     /// Returns a new file service.
     pub fn new() -> Self {
         FileService {
@@ -84,16 +87,8 @@ impl FileService {
         files.insert(file.absolute_path.clone(), file.clone());
         Ok(())
     }
-}
 
-impl Default for FileService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl IFileService for FileService {
-    fn get(&self, path: &Path) -> Result<Arc<File>> {
+    pub fn get(&self, path: &Path) -> Result<Arc<File>> {
         let path = fs::canonicalize(path)?;
         if !self.is_loaded(&path)? {
             self.load(&path)?;
@@ -101,7 +96,11 @@ impl IFileService for FileService {
         self.get_clone(&path)
     }
 
-    fn get_files_in_dir(&self, path: &Path, dialog_type: FileDialogType) -> Result<Vec<Arc<File>>> {
+    pub fn get_files_in_dir(
+        &self,
+        path: &Path,
+        dialog_type: FileDialogType,
+    ) -> Result<Vec<Arc<File>>> {
         let paths = fs::read_dir(path)?;
         let files: Vec<Arc<File>> = paths
             .map(|dir_result| -> Result<Arc<File>> {
@@ -144,7 +143,7 @@ impl IFileService for FileService {
         Ok(files)
     }
 
-    fn get_files_in_dir_recursive(&self, path: &Path) -> Result<Vec<Arc<File>>> {
+    pub fn get_files_in_dir_recursive(&self, path: &Path) -> Result<Vec<Arc<File>>> {
         let files = self.get_files_in_dir(path, FileDialogType::AudioFile)?;
         let mut audio_files: Vec<Arc<File>> = files
             .iter()
@@ -167,5 +166,11 @@ impl IFileService for FileService {
         let mut sub_files: Vec<Arc<File>> = sub_files.into_iter().flatten().collect();
         audio_files.append(&mut sub_files);
         Ok(audio_files)
+    }
+}
+
+impl Default for FileService {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -2,17 +2,11 @@ pub mod domain;
 pub mod infrastructure;
 pub mod ui;
 
-use crate::domain::{
-    FileService, IFileService, ISiskoService, ITagService, ITrackService, SiskoService, TagService,
-    TrackService,
-};
-use crate::infrastructure::DIContainerExtensions;
-use crate::ui::{CursiveWrapper, ICursive, IUi, UiHost, UiWrapper};
+use crate::domain::SiskoService;
+use crate::ui::{CursiveWrapper, UiEvent, UiEventService, UiWrapper};
 use anyhow::Result;
 use clap::Command;
-use domain::{ILogHistory, LogHistory};
-use infrastructure::acoustid::{AcoustIdService, IAcoustIdService};
-use infrastructure::musicbrainz::{IMusicBrainzService, MusicBrainzService};
+use domain::LogHistory;
 use log::{info, LevelFilter};
 use log4rs::append::file::FileAppender;
 use log4rs::append::Append;
@@ -26,19 +20,14 @@ use sisko_lib::id3v2_tag::ID3v2Tag;
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use syrette::DIContainer;
 
 /// This is the entrypoint of the program.
-fn main() -> Result<()> {
-    let container = new_container()?;
-    {
-        let log_history = container.expect_singleton::<dyn ILogHistory>();
-        let log_memory = log_history.logs();
-        config_logger(log_memory)?;
-    }
+#[tokio::main]
+async fn main() -> Result<()> {
+    config_logger()?;
     let matches = cli().get_matches();
     match matches.subcommand() {
-        None => run_gui(container),
+        None => run_gui().await,
         _ => run_test(),
     }
     Ok(())
@@ -93,10 +82,11 @@ impl Append for MemoryAppender {
     }
 }
 
-pub fn config_logger(log_memory: Arc<Mutex<Vec<String>>>) -> Result<()> {
+pub fn config_logger() -> Result<()> {
     let file_appender = FileAppender::builder()
         .encoder(Box::new(JsonEncoder::new()))
         .build("log.txt")?;
+    let log_memory = LogHistory::instance().logs();
     let memory_appender = MemoryAppender::new(
         Box::new(PatternEncoder::new("[{d}] {l} {m}{n}")),
         log_memory,
@@ -116,48 +106,6 @@ pub fn config_logger(log_memory: Arc<Mutex<Vec<String>>>) -> Result<()> {
     Ok(())
 }
 
-/// Returns a new dependency injection container.
-pub fn new_container() -> Result<DIContainer> {
-    let mut container = DIContainer::new();
-    container
-        .bind::<dyn IAcoustIdService>()
-        .to::<AcoustIdService>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn ICursive>()
-        .to::<CursiveWrapper>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn IFileService>()
-        .to::<FileService>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn ILogHistory>()
-        .to::<LogHistory>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn IMusicBrainzService>()
-        .to::<MusicBrainzService>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn ISiskoService>()
-        .to::<SiskoService>()?
-        .in_transient_scope();
-    container
-        .bind::<dyn ITagService>()
-        .to::<TagService>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn ITrackService>()
-        .to::<TrackService>()?
-        .in_singleton_scope()?;
-    container
-        .bind::<dyn IUi>()
-        .to::<UiWrapper>()?
-        .in_singleton_scope()?;
-    Ok(container)
-}
-
 /// Returns a new clap Command for the program's CLI.
 pub fn cli() -> Command {
     Command::new("sisko")
@@ -166,10 +114,36 @@ pub fn cli() -> Command {
 }
 
 /// Runs the program's cursive UI.
-pub fn run_gui(container: DIContainer) {
-    let ui = UiHost::new(container);
+pub async fn run_gui() {
+    // create ui
+    let cursive = CursiveWrapper::new();
+
+    // bind ui to event-handling thread with a callback
+    UiEventService::instance().subscribe(Box::new(move |event| match event {
+        UiEvent::OpenLogs => SiskoService::instance().open_logs(),
+        UiEvent::FolderSelected(folder) => {
+            SiskoService::instance().add_folder(folder.clone()).unwrap()
+        }
+        UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
+        UiEvent::ScanTrack(track) => {
+            let track = track.clone();
+            tokio::spawn(async move {
+                SiskoService::instance().scan_track(&track).await.unwrap();
+            });
+        }
+        UiEvent::SelectClusterFile(track_view) => {
+            SiskoService::instance().select_track(&track_view.track)
+        }
+        UiEvent::SubmitClusterFile(track_view) => {
+            UiWrapper::instance().open_track_dialog(track_view)
+        }
+        UiEvent::SubmitMetadataRow(tag_field_view) => {
+            UiWrapper::instance().open_tag_field_dialog(tag_field_view)
+        }
+    }));
+
     info!("Running GUI.");
-    ui.run();
+    cursive.run();
 }
 
 /// Runs a test.
