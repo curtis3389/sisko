@@ -37,7 +37,11 @@ impl UiWrapper {
                             .iter()
                             .any(|i| i.path == track_view.path)
                         {
-                            table.insert_item(track_view);
+                            table.insert_item(track_view.clone());
+                            if table.len() == 1 {
+                                UiEventService::instance()
+                                    .send(UiEvent::SelectClusterFile(track_view));
+                            }
                         }
                     },
                 );
