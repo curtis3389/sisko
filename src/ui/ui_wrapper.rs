@@ -32,16 +32,17 @@ impl UiWrapper {
                 s.call_on_name(
                     CLUSTER_FILE_TABLE,
                     |table: &mut TableView<TrackView, TrackColumn>| {
-                        table.insert_item(track_view);
+                        if !table
+                            .borrow_items()
+                            .iter()
+                            .any(|i| i.path == track_view.path)
+                        {
+                            table.insert_item(track_view);
+                        }
                     },
                 );
             }))
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Error sending callback to add track to {}!",
-                    CLUSTER_FILE_TABLE,
-                )
-            });
+            .unwrap();
     }
 
     pub fn open_directory_dialog(&self) {

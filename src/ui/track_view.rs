@@ -2,6 +2,7 @@ use crate::domain::Track;
 use crate::ui::TrackColumn;
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 /// Represents an audio track.
@@ -18,6 +19,8 @@ pub struct TrackView {
 
     /// The track.
     pub track: Arc<Mutex<Track>>,
+
+    pub path: PathBuf,
 }
 
 impl From<&Arc<Mutex<Track>>> for TrackView {
@@ -29,6 +32,7 @@ impl From<&Arc<Mutex<Track>>> for TrackView {
             artist: track.artist().unwrap_or("<no artist>".to_string()),
             length: track.length().unwrap_or("?:??".to_string()),
             track: mutex,
+            path: track.file.absolute_path.clone(),
         }
     }
 }
