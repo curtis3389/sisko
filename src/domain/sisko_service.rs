@@ -41,7 +41,14 @@ impl SiskoService {
     }
 
     pub fn open_logs(&self) {
-        let logs = LogHistory::instance().logs().lock().unwrap().join("");
+        let logs = LogHistory::instance()
+            .logs()
+            .lock()
+            .unwrap()
+            .join("")
+            .lines()
+            .rev()
+            .join("");
         UiWrapper::instance().open_logs(&logs);
     }
 

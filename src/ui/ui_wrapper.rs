@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use cursive::reexports::enumset::enum_set;
 use cursive::theme::{ColorStyle, Effect, Style};
 use cursive::traits::*;
-use cursive::views::{Button, Dialog, EditView, LinearLayout, TextView};
+use cursive::views::{Button, Dialog, EditView, LinearLayout, ScrollView, TextView};
 use cursive::Cursive;
 use cursive_table_view::TableView;
 use std::env;
@@ -113,7 +113,7 @@ impl UiWrapper {
 
 fn new_logs_dialog(s: &mut Cursive, logs: &String) {
     let text_view = TextView::new(logs);
-    let dialog = Dialog::around(text_view)
+    let dialog = Dialog::around(ScrollView::new(text_view))
         .title("Logs")
         .button("Close", |s| {
             s.pop_layer();
