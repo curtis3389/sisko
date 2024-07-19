@@ -171,7 +171,9 @@ impl CursiveWrapper {
             .child(Button::new("Add Folder", |_| {
                 UiEventService::instance().send(UiEvent::OpenAddFolder);
             }))
-            .child(Button::new("Add Files", Cursive::noop))
+            .child(Button::new("Add Files", |_| {
+                UiEventService::instance().send(UiEvent::OpenAddFile);
+            }))
             .child(Button::new("Cluster", Cursive::noop))
             .child(Button::new("Lookup", Cursive::noop))
             .child(Button::new("Scan", Cursive::noop))

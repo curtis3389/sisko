@@ -121,9 +121,11 @@ pub async fn run_gui() {
     // bind ui to event-handling thread with a callback
     UiEventService::instance().subscribe(Box::new(move |event| match event {
         UiEvent::OpenLogs => SiskoService::instance().open_logs(),
+        UiEvent::FileSelected(file) => SiskoService::instance().add_file(file.clone()).unwrap(),
         UiEvent::FolderSelected(folder) => {
             SiskoService::instance().add_folder(folder.clone()).unwrap()
         }
+        UiEvent::OpenAddFile => UiWrapper::instance().open_file_dialog(),
         UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
         UiEvent::ScanTrack(track) => {
             let track = track.clone();

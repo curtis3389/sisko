@@ -28,6 +28,12 @@ impl SiskoService {
         SiskoService {}
     }
 
+    pub fn add_file(&self, file: Arc<File>) -> Result<()> {
+        let track = TrackService::instance().get(&file)?;
+        UiWrapper::instance().add_cluster_file(track);
+        Ok(())
+    }
+
     pub fn add_folder(&self, file: Arc<File>) -> Result<()> {
         let files = FileService::instance().get_files_in_dir_recursive(&file.absolute_path)?;
         let tracks: Vec<Arc<Mutex<Track>>> = files

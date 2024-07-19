@@ -59,6 +59,20 @@ impl UiWrapper {
             .expect("Error sending callback to open directory dialog!");
     }
 
+    pub fn open_file_dialog(&self) {
+        CbSinkService::instance()
+            .send(Box::new(move |s: &mut Cursive| {
+                new_file_dialog(
+                    s,
+                    FileDialogType::AudioFile,
+                    |_: &mut Cursive, f: Arc<File>| {
+                        UiEventService::instance().send(UiEvent::FileSelected(f));
+                    },
+                );
+            }))
+            .expect("Error sending callback to open file dialog!");
+    }
+
     pub fn open_logs(&self, logs: &str) {
         let logs = logs.to_owned();
         CbSinkService::instance()
