@@ -3,10 +3,10 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct MediaTrack {
-    length: u32,
-    id: String,
-    number: String,
-    title: String,
-    recording: Entity,
-    position: i32,
+    pub length: Option<u32>,
+    pub id: String,
+    pub number: String,
+    pub title: String,
+    pub recording: Entity,
+    pub position: i32,
 }

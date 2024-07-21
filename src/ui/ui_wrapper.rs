@@ -1,4 +1,4 @@
-use crate::domain::{File, FileService, FileType, TagField, Track};
+use crate::domain::{Album, File, FileService, FileType, TagField, Track};
 use crate::ui::*;
 use anyhow::{anyhow, Result};
 use cursive::reexports::enumset::enum_set;
@@ -23,6 +23,25 @@ impl UiWrapper {
     /// Returns a new wrapper of the UI.
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub fn add_album(&self, album: Arc<Mutex<Album>>) {
+        let album_id = { album.lock().unwrap().id.clone() };
+        let album_views = AlbumView::for_album(&album);
+        CbSinkService::instance()
+            .send(Box::new(move |s: &mut Cursive| {
+                s.call_on_name(
+                    ALBUM_FILE_TABLE,
+                    |table: &mut TableView<AlbumView, TrackColumn>| {
+                        if !table.borrow_items().iter().any(|item| item.id == album_id) {
+                            for view in album_views {
+                                table.insert_item(view);
+                            }
+                        }
+                    },
+                );
+            }))
+            .unwrap();
     }
 
     pub fn add_cluster_file(&self, track: Arc<Mutex<Track>>) {

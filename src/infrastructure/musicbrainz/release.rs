@@ -4,12 +4,12 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Release {
     pub disambiguation: String,
-    pub barcode: String,
+    pub barcode: Option<String>,
     #[serde(rename = "artist-credit")]
     pub artist_credit: Vec<ArtistCredit>,
     pub id: String,
     pub media: Vec<Media>,
-    pub packaging: String,
+    pub packaging: Option<String>,
     pub date: String,
     #[serde(rename = "text-representation")]
     pub text_representation: TextRepresentation,
@@ -19,7 +19,7 @@ pub struct Release {
     pub title: String,
     pub status: String,
     #[serde(rename = "packaging-id")]
-    pub packaging_id: String,
+    pub packaging_id: Option<String>,
     #[serde(rename = "cover-art-archive")]
     pub cover_art_archive: CoverArtArchive,
     pub quality: String,

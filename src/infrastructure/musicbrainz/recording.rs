@@ -5,7 +5,7 @@ use serde::Deserialize;
 pub struct Recording {
     pub title: String,
     pub id: String,
-    pub length: u64,
+    pub length: Option<u64>,
     #[serde(rename = "first-release-date")]
     pub first_release_date: String,
     pub video: bool,

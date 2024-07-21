@@ -1,7 +1,10 @@
+mod album;
+mod album_service;
 mod file;
 mod file_service;
 mod file_type;
 mod log_history;
+mod recording;
 mod sisko_service;
 mod tag;
 mod tag_field;
@@ -11,10 +14,13 @@ mod tag_type;
 mod track;
 mod track_service;
 
+pub use album::*;
+pub use album_service::*;
 pub use file::*;
 pub use file_service::*;
 pub use file_type::*;
 pub use log_history::*;
+pub use recording::*;
 pub use sisko_service::*;
 pub use tag::*;
 pub use tag_field::*;

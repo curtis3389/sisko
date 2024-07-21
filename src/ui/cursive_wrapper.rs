@@ -1,7 +1,7 @@
 use super::{
-    CbSinkService, TagFieldColumn, TagFieldView, TrackColumn, TrackView, UiEvent, UiEventService,
-    ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, HIDEABLE_BOTTOM_PANEL, HIDEABLE_LEFT_PANEL,
-    HIDEABLE_RIGHT_PANEL, METADATA_TABLE,
+    AlbumView, CbSinkService, TagFieldColumn, TagFieldView, TrackColumn, TrackView, UiEvent,
+    UiEventService, ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, HIDEABLE_BOTTOM_PANEL,
+    HIDEABLE_LEFT_PANEL, HIDEABLE_RIGHT_PANEL, METADATA_TABLE,
 };
 use cursive::event::{Event, Key};
 use cursive::traits::*;
@@ -125,7 +125,7 @@ impl CursiveWrapper {
             })
             .with_name(CLUSTER_FILE_TABLE);
 
-        let album_file_table = TableView::<TrackView, TrackColumn>::new()
+        let album_file_table = TableView::<AlbumView, TrackColumn>::new()
             .column(TrackColumn::Title, TrackColumn::Title.as_str(), |c| c)
             .column(TrackColumn::Artist, TrackColumn::Artist.as_str(), |c| c)
             .column(TrackColumn::Length, TrackColumn::Length.as_str(), |c| c)

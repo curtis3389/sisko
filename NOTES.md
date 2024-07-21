@@ -1,15 +1,20 @@
+- release (album): a particular release of an album
+- release group: a group of related releases (same album in diff regions)
+- media: a disc of an album
+- track: a recording on a media of a release
+- recording: the particular recording of a song; may be on multiple diff releases
+- cluster table (left pane): contains audio files that haven't been matched to an album
+- album table (right pane): contains albums that we've matched audio files to
+- metadata table (bottom pane): contains tag field changes
 - file: a file or directory we've looked at (e.g. Rubber\ Soul/)
-- track: a file with audio data and tags we can read (e.g. track1.mp3)
+- audio file: a file with audio data and tags we can read (e.g. track1.mp3)
 - tag: a block of metadata with fields like artist and title (e.g. an ID3v2 tag)
 - tag field: a single key-value in a tag (e.g. Artist: Joy Division)
 - tag field change: a change to a tag field (e.g. add album artist tag field)
 - tag change: a change to a tag as a whole (e.g. change from v2.3.0 to v2.4.0)
-- track pairing: a pairing of a track to a the metadata of a particular recording-release combo
-- track metadata: metadata about a track from MusicBrainz (i.e. recording metadata)
+- match: a pairing of an audio file to a particular track of a release
+- track metadata: metadata about a track from MusicBrainz (i.e. recording+release+track metadata)
 - album metadata: metadata about an album from MusicBrainz (i.e. release metadata)
-- left pane: contains tracks that haven't been paired
-- right pane: contains releases with track pairings
-- bottom pane: contains tag field changes
 
 ```rust
 Track {

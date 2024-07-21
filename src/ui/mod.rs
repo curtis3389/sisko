@@ -1,3 +1,4 @@
+mod album_view;
 mod cb_sink_service;
 mod cursive_wrapper;
 mod file_column;
@@ -15,6 +16,7 @@ mod ui_event_handler;
 mod ui_event_service;
 mod ui_wrapper;
 
+pub use album_view::*;
 pub use cb_sink_service::*;
 pub use cursive_wrapper::*;
 pub use file_column::*;

@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ArtistCredit {
-    name: String,
-    joinphrase: String,
-    artist: Artist,
+    pub name: String,
+    pub joinphrase: String,
+    pub artist: Artist,
 }

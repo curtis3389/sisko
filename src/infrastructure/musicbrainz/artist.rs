@@ -3,11 +3,11 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Artist {
     #[serde(rename = "type-id")]
-    type_id: String,
+    pub type_id: Option<String>,
     #[serde(rename = "sort-name")]
-    sort_name: String,
-    name: String,
+    pub sort_name: String,
+    pub name: String,
     //artist_type: String,
-    id: String,
-    disambiguation: String,
+    pub id: String,
+    pub disambiguation: String,
 }

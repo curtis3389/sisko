@@ -7,7 +7,7 @@ use crate::ui::{CursiveWrapper, UiEvent, UiEventService, UiWrapper};
 use anyhow::Result;
 use clap::Command;
 use domain::LogHistory;
-use log::{info, LevelFilter};
+use log::{error, info, LevelFilter};
 use log4rs::append::file::FileAppender;
 use log4rs::append::Append;
 use log4rs::config::{Appender, Config, Root};
@@ -130,7 +130,14 @@ pub async fn run_gui() {
         UiEvent::ScanTrack(track) => {
             let track = track.clone();
             tokio::spawn(async move {
-                SiskoService::instance().scan_track(&track).await.unwrap();
+                match SiskoService::instance().scan_track(&track).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("{}", e);
+                        error!("{}", e.root_cause());
+                        error!("{}", e.backtrace());
+                    }
+                }
             });
         }
         UiEvent::SelectClusterFile(track_view) => {

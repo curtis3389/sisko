@@ -1,11 +1,8 @@
 use super::{LogHistory, TrackService};
-use crate::domain::{File, FileService, Track};
-use crate::infrastructure::acoustid::AcoustIdService;
-use crate::infrastructure::musicbrainz::MusicBrainzService;
+use crate::domain::{AlbumService, File, FileService, Track};
 use crate::ui::UiWrapper;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use itertools::Itertools;
-use log::{error, info};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Represents a service for application actions.
@@ -63,34 +60,18 @@ impl SiskoService {
     }
 
     pub async fn scan_track(&self, track: &Arc<Mutex<Track>>) -> Result<()> {
-        let track_path = {
-            let track = track
-                .lock()
-                .map_err(|_| anyhow!("Error locking track mutex!"))?;
-            track.file.absolute_path.clone()
-        };
-        let fingerprint = AcoustIdService::instance().get_fingerprint(&track_path)?;
-        let lookup = AcoustIdService::instance()
-            .lookup_fingerprint(&fingerprint)
+        // get fingerprint for audiofile
+        // get recording id for fingerprint
+        // load metadata for recording id
+        // match audiofile to a release
+        // add matched release to album table
+        let recording = AlbumService::instance()
+            .get_recording_for_track(track)
             .await?;
-        let recordingid = lookup[0].recordings[0].id.clone();
-        let recording = MusicBrainzService::instance()
-            .lookup_recording(&recordingid)
+        let album = AlbumService::instance()
+            .get_album_for_recording(&recording)
             .await?;
-        let release_id = &recording.releases[0].id;
-        match MusicBrainzService::instance()
-            .lookup_release(release_id)
-            .await
-        {
-            Ok(release) => info!("{} {}", release.title, release.media[0].track_count),
-            Err(e) => {
-                error!("{}", e);
-                let root_cause = e.root_cause();
-                error!("root cause: {root_cause}");
-            }
-        }
-        // TODO: pair track to musicbrainz
-        // when paired, remove track from cluster table and update album row to paired
+        UiWrapper::instance().add_album(album);
         Ok(())
     }
 }
