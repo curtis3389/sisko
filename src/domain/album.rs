@@ -20,7 +20,7 @@ impl From<&Release> for Album {
                 media
                     .tracks
                     .iter()
-                    .map(|track| Arc::new(Mutex::new(Track::from(track))))
+                    .map(|track| Arc::new(Mutex::new(Track::new(media, track))))
             })
             .collect();
         Self {

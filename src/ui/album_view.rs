@@ -11,7 +11,7 @@ pub struct AlbumView {
     pub id: String,
     pub album_id: String,
     pub album: Arc<Mutex<Album>>,
-    pub tracks: Option<Arc<Mutex<Track>>>,
+    pub track: Option<Arc<Mutex<Track>>>,
 }
 
 impl AlbumView {
@@ -48,28 +48,45 @@ impl AlbumView {
             id: track.id.clone(),
             album_id,
             album,
-            tracks: Some(am),
+            track: Some(am),
         }
     }
 
     pub fn artist(&self) -> String {
-        match &self.tracks {
+        match &self.track {
             None => self.album.lock().unwrap().artist.clone(),
             Some(track) => track.lock().unwrap().artist.clone(),
         }
     }
 
+    pub fn disc_number(&self) -> i32 {
+        match &self.track {
+            None => 0,
+            Some(track) => track.lock().unwrap().disc_number,
+        }
+    }
+
     pub fn length(&self) -> String {
-        match &self.tracks {
+        match &self.track {
             None => self.album.lock().unwrap().length.clone(),
             Some(track) => track.lock().unwrap().length.clone(),
         }
     }
 
+    pub fn number(&self) -> i32 {
+        match &self.track {
+            None => 0,
+            Some(track) => track.lock().unwrap().number,
+        }
+    }
+
     pub fn title(&self) -> String {
-        match &self.tracks {
+        match &self.track {
             None => self.album.lock().unwrap().title.clone(),
-            Some(track) => track.lock().unwrap().title.clone(),
+            Some(track) => {
+                let track = track.lock().unwrap();
+                format!("  {}-{} {}", track.disc_number, track.number, track.title)
+            }
         }
     }
 }
@@ -82,7 +99,7 @@ impl From<&Arc<Mutex<Album>>> for AlbumView {
             id: album.id.clone(),
             album_id: album.id.clone(),
             album: am,
-            tracks: None,
+            track: None,
         }
     }
 }
@@ -111,10 +128,32 @@ impl TableViewItem<AudioFileColumn> for AlbumView {
     where
         Self: Sized,
     {
-        match column {
-            AudioFileColumn::Title => self.title().cmp(&other.title()),
-            AudioFileColumn::Artist => self.artist().cmp(&other.artist()),
-            AudioFileColumn::Length => self.length().cmp(&other.length()),
+        match self.album_id.cmp(&other.album_id) {
+            Ordering::Equal => {
+                if self.track.is_none() {
+                    Ordering::Less
+                } else if other.track.is_none() {
+                    Ordering::Greater
+                } else {
+                    match column {
+                        AudioFileColumn::Title => {
+                            match self.disc_number().cmp(&other.disc_number()) {
+                                Ordering::Equal => match self.number().cmp(&other.number()) {
+                                    Ordering::Equal => self.title().cmp(&other.title()),
+                                    Ordering::Less => Ordering::Less,
+                                    Ordering::Greater => Ordering::Greater,
+                                },
+                                Ordering::Less => Ordering::Less,
+                                Ordering::Greater => Ordering::Greater,
+                            }
+                        }
+                        AudioFileColumn::Artist => self.artist().cmp(&other.artist()),
+                        AudioFileColumn::Length => self.length().cmp(&other.length()),
+                    }
+                }
+            }
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
         }
     }
 }

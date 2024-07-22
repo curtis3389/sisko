@@ -6,21 +6,25 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub length: String,
+    pub number: i32,
+    pub disc_number: i32,
 }
 
-impl From<&musicbrainz::MediaTrack> for Track {
-    fn from(r: &musicbrainz::MediaTrack) -> Self {
-        let length = r.length.map(|l| l / 1000).unwrap_or_default();
+impl Track {
+    pub fn new(media: &musicbrainz::Media, track: &musicbrainz::MediaTrack) -> Self {
+        let length = track.length.map(|l| l / 1000).unwrap_or_default();
         Self {
-            id: r.id.clone(),
-            title: r.title.clone(),
-            artist: r
+            id: track.id.clone(),
+            title: track.title.clone(),
+            artist: track
                 .recording
                 .artist_credit
                 .first()
                 .map(|a| a.artist.name.clone())
                 .unwrap_or_default(),
             length: format!("{}:{}", length / 60, length % 60),
+            number: track.number.parse::<i32>().unwrap(),
+            disc_number: media.position,
         }
     }
 }
