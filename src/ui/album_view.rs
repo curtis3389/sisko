@@ -82,10 +82,29 @@ impl AlbumView {
 
     pub fn title(&self) -> String {
         match &self.track {
-            None => self.album.lock().unwrap().title.clone(),
+            None => {
+                let album = self.album.lock().unwrap();
+                let all_matched = album
+                    .tracks
+                    .iter()
+                    .all(|track| !track.lock().unwrap().matched_files.is_empty());
+                let icon = match all_matched {
+                    true => "⦿", // TODO: use change list to add asterisk above: ⦿⃰ and ⦾⃰
+                    false => "⦾",
+                };
+                format!("{} {}", icon, album.title.clone())
+            }
             Some(track) => {
                 let track = track.lock().unwrap();
-                format!("  {}-{} {}", track.disc_number, track.number, track.title)
+                let has_match = !track.matched_files.is_empty();
+                let icon = match has_match {
+                    true => "█", // TODO: use match rating to use other block characters: ▁, ▂, ▃, ▄, ▅, ▆, ▇
+                    false => " ", // TODO: show matched and no changes with ✓ or ✔
+                };
+                format!(
+                    "  {} {}-{} {}",
+                    icon, track.disc_number, track.number, track.title
+                )
             }
         }
     }

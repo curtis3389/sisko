@@ -45,7 +45,14 @@ impl AlbumService {
         // get album
         let release_id = self.get_release_id(&lookup)?;
         let release = lookup.releases.iter().find(|r| r.id == release_id).unwrap();
-        Ok(Arc::new(Mutex::new(Album::from(release))))
+        let album = Album::from(release);
+        let track = album
+            .tracks
+            .iter()
+            .find(|t| t.lock().unwrap().recording_id == recordingid)
+            .unwrap();
+        track.lock().unwrap().matched_files.push(audio_file.clone());
+        Ok(Arc::new(Mutex::new(album)))
     }
 
     fn get_release_id(&self, lookup: &ReleaseLookup) -> Result<String> {

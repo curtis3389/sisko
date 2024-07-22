@@ -1,4 +1,5 @@
-use crate::infrastructure::musicbrainz;
+use super::AudioFile;
+use crate::infrastructure::{musicbrainz, Am};
 
 #[derive(Clone, Debug)]
 pub struct Track {
@@ -8,6 +9,8 @@ pub struct Track {
     pub length: String,
     pub number: i32,
     pub disc_number: i32,
+    pub matched_files: Vec<Am<AudioFile>>,
+    pub recording_id: String,
 }
 
 impl Track {
@@ -25,6 +28,8 @@ impl Track {
             length: format!("{}:{}", length / 60, length % 60),
             number: track.number.parse::<i32>().unwrap(),
             disc_number: media.position,
+            matched_files: Vec::new(),
+            recording_id: track.recording.id.clone(),
         }
     }
 }
