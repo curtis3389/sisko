@@ -65,6 +65,6 @@ impl Default for AcoustIdService {
 
 #[derive(Deserialize)]
 struct LookupResponse {
-    status: String,
-    results: Vec<AcoustIdResult>,
+    pub status: String,
+    pub results: Vec<AcoustIdResult>,
 }

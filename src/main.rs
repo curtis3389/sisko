@@ -127,10 +127,10 @@ pub async fn run_gui() {
         }
         UiEvent::OpenAddFile => UiWrapper::instance().open_file_dialog(),
         UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
-        UiEvent::ScanTrack(track) => {
-            let track = track.clone();
+        UiEvent::ScanAudioFile(audio_file) => {
+            let audio_file = audio_file.clone();
             tokio::spawn(async move {
-                match SiskoService::instance().scan_track(&track).await {
+                match SiskoService::instance().scan_audio_file(&audio_file).await {
                     Ok(_) => {}
                     Err(e) => {
                         error!("{}", e);
@@ -140,11 +140,11 @@ pub async fn run_gui() {
                 }
             });
         }
-        UiEvent::SelectClusterFile(track_view) => {
-            SiskoService::instance().select_track(&track_view.track)
+        UiEvent::SelectClusterFile(audio_file_view) => {
+            SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
         }
-        UiEvent::SubmitClusterFile(track_view) => {
-            UiWrapper::instance().open_track_dialog(track_view)
+        UiEvent::SubmitClusterFile(audio_file_view) => {
+            UiWrapper::instance().open_audio_file_dialog(audio_file_view)
         }
         UiEvent::SubmitMetadataRow(tag_field_view) => {
             UiWrapper::instance().open_tag_field_dialog(tag_field_view)

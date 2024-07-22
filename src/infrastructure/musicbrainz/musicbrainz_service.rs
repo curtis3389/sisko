@@ -27,7 +27,7 @@ impl MusicBrainzService {
 
     pub async fn lookup_recording(&self, recording_id: &str) -> Result<Recording> {
         let mut last = self.last.lock().await;
-        let elapsed = Instant::now() - last.clone();
+        let elapsed = Instant::now() - *last;
         if elapsed < ONE_SEC {
             sleep(ONE_SEC - elapsed).await;
         }
@@ -51,7 +51,7 @@ impl MusicBrainzService {
 
     pub async fn lookup_release(&self, release_id: &str) -> Result<Release> {
         let mut last = self.last.lock().await;
-        let elapsed = Instant::now() - last.clone();
+        let elapsed = Instant::now() - *last;
         if elapsed < ONE_SEC {
             sleep(ONE_SEC - elapsed).await;
         }
@@ -76,7 +76,7 @@ impl MusicBrainzService {
         recording_id: &String,
     ) -> Result<ReleaseLookup> {
         let mut last = self.last.lock().await;
-        let elapsed = Instant::now() - last.clone();
+        let elapsed = Instant::now() - *last;
         if elapsed < ONE_SEC {
             sleep(ONE_SEC - elapsed).await;
         }
@@ -106,8 +106,8 @@ impl Default for MusicBrainzService {
 #[derive(Deserialize)]
 pub struct ReleaseLookup {
     #[serde(rename = "release-count")]
-    release_count: i32,
+    pub release_count: i32,
     #[serde(rename = "release-offset")]
-    release_offset: i32,
-    releases: Vec<Release>,
+    pub release_offset: i32,
+    pub releases: Vec<Release>,
 }

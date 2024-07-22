@@ -1,5 +1,5 @@
-use super::{LogHistory, TrackService};
-use crate::domain::{AlbumService, File, FileService, Track};
+use super::{AudioFileService, LogHistory};
+use crate::domain::{AlbumService, AudioFile, File, FileService};
 use crate::ui::UiWrapper;
 use anyhow::Result;
 use itertools::Itertools;
@@ -15,29 +15,23 @@ impl SiskoService {
     }
 
     /// Returns a new service for application actions.
-    ///
-    /// # Arguments
-    ///
-    /// * `file_service` - A service for files.
-    /// * `track_service` - A service for tracks.
-    /// * `ui` - A service for the UI.
     pub fn new() -> Self {
         SiskoService {}
     }
 
     pub fn add_file(&self, file: Arc<File>) -> Result<()> {
-        let track = TrackService::instance().get(&file)?;
-        UiWrapper::instance().add_cluster_file(track);
+        let audio_file = AudioFileService::instance().get(&file)?;
+        UiWrapper::instance().add_cluster_file(audio_file);
         Ok(())
     }
 
     pub fn add_folder(&self, file: Arc<File>) -> Result<()> {
         let files = FileService::instance().get_files_in_dir_recursive(&file.absolute_path)?;
-        let tracks: Vec<Arc<Mutex<Track>>> = files
+        let audio_files: Vec<Arc<Mutex<AudioFile>>> = files
             .iter()
-            .map(|f| TrackService::instance().get(f))
+            .map(|f| AudioFileService::instance().get(f))
             .try_collect()?;
-        tracks
+        audio_files
             .into_iter()
             .for_each(|t| UiWrapper::instance().add_cluster_file(t));
         Ok(())
@@ -55,18 +49,18 @@ impl SiskoService {
         UiWrapper::instance().open_logs(&logs);
     }
 
-    pub fn select_track(&self, track: &Arc<Mutex<Track>>) {
-        UiWrapper::instance().set_metadata_table(track);
+    pub fn select_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) {
+        UiWrapper::instance().set_metadata_table(audio_file);
     }
 
-    pub async fn scan_track(&self, track: &Arc<Mutex<Track>>) -> Result<()> {
+    pub async fn scan_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
         // get fingerprint for audiofile
         // get recording id for fingerprint
         // load metadata for recording id
         // match audiofile to a release
         // add matched release to album table
         let recording = AlbumService::instance()
-            .get_recording_for_track(track)
+            .get_recording_for_file(audio_file)
             .await?;
         let album = AlbumService::instance()
             .get_album_for_recording(&recording)

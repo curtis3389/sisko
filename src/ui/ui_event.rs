@@ -1,5 +1,5 @@
-use super::{TagFieldView, TrackView};
-use crate::domain::{File, Track};
+use super::{AudioFileView, TagFieldView};
+use crate::domain::{AudioFile, File};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -9,8 +9,8 @@ pub enum UiEvent {
     OpenAddFile,
     OpenAddFolder,
     OpenLogs,
-    ScanTrack(Arc<Mutex<Track>>),
-    SelectClusterFile(TrackView),
-    SubmitClusterFile(TrackView),
+    ScanAudioFile(Arc<Mutex<AudioFile>>),
+    SelectClusterFile(AudioFileView),
+    SubmitClusterFile(AudioFileView),
     SubmitMetadataRow(TagFieldView),
 }

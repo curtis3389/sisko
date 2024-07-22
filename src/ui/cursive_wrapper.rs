@@ -1,6 +1,6 @@
 use super::{
-    AlbumView, CbSinkService, TagFieldColumn, TagFieldView, TrackColumn, TrackView, UiEvent,
-    UiEventService, ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, HIDEABLE_BOTTOM_PANEL,
+    AlbumView, AudioFileColumn, AudioFileView, CbSinkService, TagFieldColumn, TagFieldView,
+    UiEvent, UiEventService, ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, HIDEABLE_BOTTOM_PANEL,
     HIDEABLE_LEFT_PANEL, HIDEABLE_RIGHT_PANEL, METADATA_TABLE,
 };
 use cursive::event::{Event, Key};
@@ -53,7 +53,7 @@ impl CursiveWrapper {
         root.add_global_callback(Event::CtrlChar('l'), |s| {
             s.call_on_name(
                 HIDEABLE_LEFT_PANEL,
-                |hideable: &mut TablePanel<TrackView, TrackColumn>| {
+                |hideable: &mut TablePanel<AudioFileView, AudioFileColumn>| {
                     hideable.set_visible(!hideable.is_visible());
                 },
             );
@@ -61,7 +61,7 @@ impl CursiveWrapper {
         root.add_global_callback(Event::CtrlChar('r'), |s| {
             s.call_on_name(
                 HIDEABLE_RIGHT_PANEL,
-                |hideable: &mut TablePanel<TrackView, TrackColumn>| {
+                |hideable: &mut TablePanel<AudioFileView, AudioFileColumn>| {
                     hideable.set_visible(!hideable.is_visible());
                 },
             );
@@ -95,40 +95,64 @@ impl CursiveWrapper {
     ///
     /// * `root` - The root to add the widgets to.
     fn add_widgets(root: &mut CursiveRunnable) {
-        let cluster_file_table = TableView::<TrackView, TrackColumn>::new()
-            .column(TrackColumn::Title, TrackColumn::Title.as_str(), |c| c)
-            .column(TrackColumn::Artist, TrackColumn::Artist.as_str(), |c| c)
-            .column(TrackColumn::Length, TrackColumn::Length.as_str(), |c| c)
+        let cluster_file_table = TableView::<AudioFileView, AudioFileColumn>::new()
+            .column(
+                AudioFileColumn::Title,
+                AudioFileColumn::Title.as_str(),
+                |c| c,
+            )
+            .column(
+                AudioFileColumn::Artist,
+                AudioFileColumn::Artist.as_str(),
+                |c| c,
+            )
+            .column(
+                AudioFileColumn::Length,
+                AudioFileColumn::Length.as_str(),
+                |c| c,
+            )
             .on_select(|s: &mut Cursive, _row: usize, index: usize| {
-                let selected_track = s
+                let selected_audio_file = s
                     .call_on_name(
                         CLUSTER_FILE_TABLE,
-                        |table_view: &mut TableView<TrackView, TrackColumn>| {
+                        |table_view: &mut TableView<AudioFileView, AudioFileColumn>| {
                             let item = table_view.borrow_item(index).unwrap();
                             item.clone()
                         },
                     )
                     .unwrap();
-                UiEventService::instance().send(UiEvent::SelectClusterFile(selected_track));
+                UiEventService::instance().send(UiEvent::SelectClusterFile(selected_audio_file));
             })
             .on_submit(|s: &mut Cursive, _row: usize, index: usize| {
-                let selected_track = s
+                let selected_audio_file = s
                     .call_on_name(
                         CLUSTER_FILE_TABLE,
-                        |table_view: &mut TableView<TrackView, TrackColumn>| {
+                        |table_view: &mut TableView<AudioFileView, AudioFileColumn>| {
                             let item = table_view.borrow_item(index).unwrap();
                             item.clone()
                         },
                     )
                     .unwrap();
-                UiEventService::instance().send(UiEvent::SubmitClusterFile(selected_track));
+                UiEventService::instance().send(UiEvent::SubmitClusterFile(selected_audio_file));
             })
             .with_name(CLUSTER_FILE_TABLE);
 
-        let album_file_table = TableView::<AlbumView, TrackColumn>::new()
-            .column(TrackColumn::Title, TrackColumn::Title.as_str(), |c| c)
-            .column(TrackColumn::Artist, TrackColumn::Artist.as_str(), |c| c)
-            .column(TrackColumn::Length, TrackColumn::Length.as_str(), |c| c)
+        let album_file_table = TableView::<AlbumView, AudioFileColumn>::new()
+            .column(
+                AudioFileColumn::Title,
+                AudioFileColumn::Title.as_str(),
+                |c| c,
+            )
+            .column(
+                AudioFileColumn::Artist,
+                AudioFileColumn::Artist.as_str(),
+                |c| c,
+            )
+            .column(
+                AudioFileColumn::Length,
+                AudioFileColumn::Length.as_str(),
+                |c| c,
+            )
             .with_name(ALBUM_FILE_TABLE);
 
         let metadata_table = TableView::<TagFieldView, TagFieldColumn>::new()

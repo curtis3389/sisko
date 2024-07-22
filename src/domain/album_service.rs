@@ -1,4 +1,4 @@
-use super::{Album, Recording, Track};
+use super::{Album, AudioFile, Recording};
 use crate::infrastructure::acoustid::AcoustIdService;
 use crate::infrastructure::musicbrainz::MusicBrainzService;
 use anyhow::{anyhow, Result};
@@ -24,10 +24,10 @@ impl AlbumService {
     }
 
     pub async fn get_album(&self, album_id: &String) -> Result<Arc<Mutex<Album>>> {
-        if !self.is_album_loaded(&album_id)? {
-            self.load_album(&album_id).await?;
+        if !self.is_album_loaded(album_id)? {
+            self.load_album(album_id).await?;
         }
-        self.get_album_clone(&album_id)
+        self.get_album_clone(album_id)
     }
 
     pub async fn get_album_for_recording(
@@ -45,18 +45,18 @@ impl AlbumService {
         self.get_recording_clone(recording_id)
     }
 
-    pub async fn get_recording_for_track(
+    pub async fn get_recording_for_file(
         &self,
-        track: &Arc<Mutex<Track>>,
+        file: &Arc<Mutex<AudioFile>>,
     ) -> Result<Arc<Mutex<Recording>>> {
         // fingerprint
-        let track_path = {
-            let track = track
+        let file_path = {
+            let file = file
                 .lock()
-                .map_err(|_| anyhow!("Error locking track mutex!"))?;
-            track.file.absolute_path.clone()
+                .map_err(|_| anyhow!("Error locking file mutex!"))?;
+            file.file.absolute_path.clone()
         };
-        let fingerprint = AcoustIdService::instance().get_fingerprint(&track_path)?;
+        let fingerprint = AcoustIdService::instance().get_fingerprint(&file_path)?;
 
         // acoustid
         let lookup = AcoustIdService::instance()
@@ -68,12 +68,12 @@ impl AlbumService {
         let recording = self.get_recording(&recordingid).await?;
 
         {
-            let tracks = &mut recording.lock().unwrap().tracks;
-            if !tracks
+            let audio_files = &mut recording.lock().unwrap().audio_files;
+            if !audio_files
                 .iter()
-                .any(|t| t.lock().unwrap().file.absolute_path == track_path)
+                .any(|t| t.lock().unwrap().file.absolute_path == file_path)
             {
-                tracks.push(track.clone());
+                audio_files.push(file.clone());
             }
         }
 
@@ -96,7 +96,7 @@ impl AlbumService {
             .contains_key(recording_id))
     }
 
-    async fn load_album(&self, album_id: &String) -> Result<()> {
+    async fn load_album(&self, album_id: &str) -> Result<()> {
         // releases
         let release = MusicBrainzService::instance()
             .lookup_release(album_id)
@@ -115,21 +115,21 @@ impl AlbumService {
         self.albums
             .lock()
             .map_err(|_| anyhow!("Error locking albums mutex!"))?
-            .insert(album_id.clone(), album);
+            .insert(album_id.to_string(), album);
 
         Ok(())
     }
 
-    async fn load_recording(&self, recording_id: &String) -> Result<()> {
+    async fn load_recording(&self, recording_id: &str) -> Result<()> {
         let recording = MusicBrainzService::instance()
-            .lookup_recording(&recording_id)
+            .lookup_recording(recording_id)
             .await?;
 
         let recording = Arc::new(Mutex::new(Recording::from(&recording)));
         self.recordings
             .lock()
             .map_err(|_| anyhow!("Error locking recordings mutex!"))?
-            .insert(recording_id.clone(), recording);
+            .insert(recording_id.to_string(), recording);
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use super::Track;
+use super::AudioFile;
 use crate::infrastructure::musicbrainz;
 use std::sync::{Arc, Mutex};
 
@@ -9,7 +9,7 @@ pub struct Recording {
     pub artist: String,
     pub length: String,
     pub release_ids: Vec<String>,
-    pub tracks: Vec<Arc<Mutex<Track>>>,
+    pub audio_files: Vec<Arc<Mutex<AudioFile>>>,
 }
 
 impl From<&musicbrainz::Recording> for Recording {
@@ -20,12 +20,12 @@ impl From<&musicbrainz::Recording> for Recording {
             title: r.title.clone(),
             artist: r
                 .artist_credit
-                .get(0)
+                .first()
                 .map(|a| a.artist.name.clone())
                 .unwrap_or_default(),
             length: format!("{}:{}", length / 60, length % 60),
             release_ids: r.releases.iter().map(|e| e.id.clone()).collect(),
-            tracks: vec![],
+            audio_files: vec![],
         }
     }
 }

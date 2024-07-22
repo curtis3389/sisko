@@ -18,7 +18,7 @@ impl Album {
             title: release.title.clone(),
             artist: release
                 .artist_credit
-                .get(0)
+                .first()
                 .map(|a| a.artist.name.clone())
                 .unwrap_or_default(),
             length: String::from("?:??"),

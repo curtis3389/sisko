@@ -1,4 +1,4 @@
-use super::TrackColumn;
+use super::AudioFileColumn;
 use crate::domain::{Album, Recording};
 use cursive_table_view::TableViewItem;
 use std::{
@@ -87,34 +87,34 @@ impl From<&Arc<Mutex<Album>>> for AlbumView {
     }
 }
 
-impl TableViewItem<TrackColumn> for AlbumView {
-    /// Returns the value of the given column for this Track.
+impl TableViewItem<AudioFileColumn> for AlbumView {
+    /// Returns the value of the given column for this AudioFile.
     ///
     /// # Arguments
     ///
     /// * `column` - The column to get the value of.
-    fn to_column(&self, column: TrackColumn) -> String {
+    fn to_column(&self, column: AudioFileColumn) -> String {
         match column {
-            TrackColumn::Title => self.title(),
-            TrackColumn::Artist => self.artist(),
-            TrackColumn::Length => self.length(),
+            AudioFileColumn::Title => self.title(),
+            AudioFileColumn::Artist => self.artist(),
+            AudioFileColumn::Length => self.length(),
         }
     }
 
-    /// Compares the value of the given column to another Track.
+    /// Compares the value of the given column to another AudioFile.
     ///
     /// # Arguments
     ///
-    /// * `other` - The other Track to compare to.
-    /// * `column` - The column to compare between the Tracks.
-    fn cmp(&self, other: &Self, column: TrackColumn) -> Ordering
+    /// * `other` - The other AudioFile to compare to.
+    /// * `column` - The column to compare between the AudioFiles.
+    fn cmp(&self, other: &Self, column: AudioFileColumn) -> Ordering
     where
         Self: Sized,
     {
         match column {
-            TrackColumn::Title => self.title().cmp(&other.title()),
-            TrackColumn::Artist => self.artist().cmp(&other.artist()),
-            TrackColumn::Length => self.length().cmp(&other.length()),
+            AudioFileColumn::Title => self.title().cmp(&other.title()),
+            AudioFileColumn::Artist => self.artist().cmp(&other.artist()),
+            AudioFileColumn::Length => self.length().cmp(&other.length()),
         }
     }
 }

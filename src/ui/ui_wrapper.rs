@@ -1,4 +1,4 @@
-use crate::domain::{Album, File, FileService, FileType, TagField, Track};
+use crate::domain::{Album, AudioFile, File, FileService, FileType, TagField};
 use crate::ui::*;
 use anyhow::{anyhow, Result};
 use cursive::reexports::enumset::enum_set;
@@ -32,7 +32,7 @@ impl UiWrapper {
             .send(Box::new(move |s: &mut Cursive| {
                 s.call_on_name(
                     ALBUM_FILE_TABLE,
-                    |table: &mut TableView<AlbumView, TrackColumn>| {
+                    |table: &mut TableView<AlbumView, AudioFileColumn>| {
                         if !table.borrow_items().iter().any(|item| item.id == album_id) {
                             for view in album_views {
                                 table.insert_item(view);
@@ -44,22 +44,22 @@ impl UiWrapper {
             .unwrap();
     }
 
-    pub fn add_cluster_file(&self, track: Arc<Mutex<Track>>) {
-        let track_view = TrackView::from(&track);
+    pub fn add_cluster_file(&self, audio_file: Arc<Mutex<AudioFile>>) {
+        let audio_file_view = AudioFileView::from(&audio_file);
         CbSinkService::instance()
             .send(Box::new(move |s: &mut Cursive| {
                 s.call_on_name(
                     CLUSTER_FILE_TABLE,
-                    |table: &mut TableView<TrackView, TrackColumn>| {
+                    |table: &mut TableView<AudioFileView, AudioFileColumn>| {
                         if !table
                             .borrow_items()
                             .iter()
-                            .any(|i| i.path == track_view.path)
+                            .any(|i| i.path == audio_file_view.path)
                         {
-                            table.insert_item(track_view.clone());
+                            table.insert_item(audio_file_view.clone());
                             if table.len() == 1 {
                                 UiEventService::instance()
-                                    .send(UiEvent::SelectClusterFile(track_view));
+                                    .send(UiEvent::SelectClusterFile(audio_file_view));
                             }
                         }
                     },
@@ -114,19 +114,19 @@ impl UiWrapper {
             .expect("Error sending callback to open tag field dialog!");
     }
 
-    pub fn open_track_dialog(&self, track: &TrackView) {
-        let track = track.clone();
+    pub fn open_audio_file_dialog(&self, audio_file: &AudioFileView) {
+        let audio_file = audio_file.clone();
         CbSinkService::instance()
             .send(Box::new(move |s: &mut Cursive| {
-                track_dialog(s, &track);
+                audio_file_dialog(s, &audio_file);
             }))
             .expect("Error sending callback to open tag field dialog!");
     }
 
-    pub fn set_metadata_table(&self, track: &Arc<Mutex<Track>>) {
-        let arc = track;
-        let track = track.lock().expect("Failed to lock track mutex!");
-        let items: Vec<TagFieldView> = track
+    pub fn set_metadata_table(&self, audio_file: &Arc<Mutex<AudioFile>>) {
+        let arc = audio_file;
+        let audio_file = audio_file.lock().expect("Failed to lock audio file mutex!");
+        let items: Vec<TagFieldView> = audio_file
             .tags
             .iter()
             .flat_map(|tag| {
@@ -279,7 +279,7 @@ where
 /// * `s` - The Cursive to open the dialog with.
 /// * `view` - The tag field view to open the dialog for.
 fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
-    let track = view.track.clone();
+    let audio_file = view.audio_file.clone();
     let tag_type = view.tag_type.clone();
     let field = view.get_field();
     let title = field.display_name();
@@ -337,8 +337,8 @@ fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
                 }
                 TagField::Unknown(_, _) => field,
             };
-            let mut track = track.lock().expect("Failed to lock track mutex!");
-            track.update_tag_field(&tag_type, field);
+            let mut audio_file = audio_file.lock().expect("Failed to lock audio file mutex!");
+            audio_file.update_tag_field(&tag_type, field);
             s.pop_layer();
         })
         .button("Cancel", |s| {
@@ -347,17 +347,17 @@ fn tag_field_dialog(s: &mut Cursive, view: &TagFieldView) {
     s.add_layer(dialog);
 }
 
-/// Opens a track actions dialog for the given track view.
+/// Opens an audio file actions dialog for the given audio file view.
 ///
 /// # Arguments
 ///
 /// * `s` - The Cursive to open the dialog with.
-/// * `view` - The track view to open the dialog for.
-fn track_dialog(s: &mut Cursive, view: &TrackView) {
-    let track = view.track.clone();
+/// * `view` - The audio file view to open the dialog for.
+fn audio_file_dialog(s: &mut Cursive, view: &AudioFileView) {
+    let audio_file = view.audio_file.clone();
     let lookup = Button::new("Lookup", |_| {});
     let scan = Button::new("Scan", move |_| {
-        UiEventService::instance().send(UiEvent::ScanTrack(track.clone()))
+        UiEventService::instance().send(UiEvent::ScanAudioFile(audio_file.clone()))
     });
     let save = Button::new("Save", |_| {});
     let remove = Button::new("Remove", |_| {});

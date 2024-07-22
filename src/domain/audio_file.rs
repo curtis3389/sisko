@@ -1,37 +1,37 @@
 use crate::domain::{File, Tag, TagField, TagType};
 
-/// Represents an audio track.
+/// Represents a file that contains audio data recognized by sisko.
 #[derive(Clone, Debug)]
-pub struct Track {
-    /// The file this track is from.
+pub struct AudioFile {
+    /// The file that contains audio data.
     pub file: File,
 
-    /// The tags on the file.
+    /// The metadata tags on the file.
     pub tags: Vec<Tag>,
 }
 
-impl Track {
-    /// Returns a new track for the given file and tags.
+impl AudioFile {
+    /// Returns a new audio file for the given file and tags.
     ///
     /// # Arguments
     ///
-    /// * `file` - The file the track is for.
+    /// * `file` - The file that contains audio data.
     /// * `tags` - The metadata tags from the file.
     pub fn new(file: File, tags: Vec<Tag>) -> Self {
         Self { file, tags }
     }
 
-    /// Returns the artist of the track, if any.
+    /// Returns the artist of the audio, if any.
     pub fn artist(&self) -> Option<String> {
         self.tags.iter().filter_map(|t| t.artist()).next()
     }
 
-    /// Returns the length of the track, if any.
+    /// Returns the length of the audio, if any.
     pub fn length(&self) -> Option<String> {
         None
     }
 
-    /// Returns the title of the track, if any.
+    /// Returns the title of the title, if any.
     pub fn title(&self) -> Option<String> {
         self.tags.iter().filter_map(|t| t.title()).next()
     }
@@ -49,7 +49,7 @@ impl Track {
             .find(|t| t.tag_type == *tag_type)
             .unwrap_or_else(|| {
                 panic!(
-                    "Error trying to update {} tag that's not in the track!",
+                    "Error trying to update {} tag that's not in the audio file!",
                     tag_type
                 )
             });

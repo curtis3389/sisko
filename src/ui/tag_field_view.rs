@@ -1,4 +1,4 @@
-use crate::domain::{TagField, TagFieldType, TagType, Track};
+use crate::domain::{AudioFile, TagField, TagFieldType, TagType};
 use crate::ui::TagFieldColumn;
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 /// Represents the UI view of a tag field.
 #[derive(Clone, Debug)]
 pub struct TagFieldView {
-    /// The track the tag field is from.
-    pub track: Arc<Mutex<Track>>,
+    /// The audio file the tag field is from.
+    pub audio_file: Arc<Mutex<AudioFile>>,
 
     /// The type of the tag the tag field is from.
     pub tag_type: TagType,
@@ -18,16 +18,20 @@ pub struct TagFieldView {
 }
 
 impl TagFieldView {
-    /// Returns a new view of a tag field for the given track and types.
+    /// Returns a new view of a tag field for the given audio file and types.
     ///
     /// # Arguments
     ///
-    /// * `track` - The track the tag field is in.
+    /// * `audio_file` - The audio file the tag field is in.
     /// * `tag_type` - The type of the tag the field is in.
     /// * `field` - The type of the field.
-    pub fn new(track: &Arc<Mutex<Track>>, tag_type: &TagType, field: &TagFieldType) -> Self {
+    pub fn new(
+        audio_file: &Arc<Mutex<AudioFile>>,
+        tag_type: &TagType,
+        field: &TagFieldType,
+    ) -> Self {
         Self {
-            track: track.clone(),
+            audio_file: audio_file.clone(),
             tag_type: tag_type.clone(),
             tag_field_type: field.clone(),
         }
@@ -35,8 +39,11 @@ impl TagFieldView {
 
     /// Returns the tag field referred to by this view.
     pub fn get_field(&self) -> TagField {
-        let track = self.track.lock().expect("Error locking a track mutex!");
-        let tag = track
+        let audio_file = self
+            .audio_file
+            .lock()
+            .expect("Error locking a audio file mutex!");
+        let tag = audio_file
             .tags
             .iter()
             .find(|tag| tag.tag_type == self.tag_type)
@@ -44,7 +51,7 @@ impl TagFieldView {
                 panic!(
                     "Couldn't find {} tag in {}!",
                     self.tag_type,
-                    track.file.absolute_path.to_string_lossy()
+                    audio_file.file.absolute_path.to_string_lossy()
                 )
             });
         tag.fields
@@ -55,7 +62,7 @@ impl TagFieldView {
                     "Couldn't find {} field in {} tag in {}!",
                     self.tag_field_type,
                     self.tag_type,
-                    track.file.absolute_path.to_string_lossy()
+                    audio_file.file.absolute_path.to_string_lossy()
                 )
             })
             .clone()
