@@ -1,4 +1,4 @@
-use super::{ArtistCredit, Entity};
+use super::ArtistCredit;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -9,7 +9,6 @@ pub struct Recording {
     #[serde(rename = "first-release-date")]
     pub first_release_date: String,
     pub video: bool,
-    pub releases: Vec<Entity>,
     #[serde(rename = "artist-credit")]
     pub artist_credit: Vec<ArtistCredit>,
     pub disambiguation: String,

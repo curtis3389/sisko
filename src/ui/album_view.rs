@@ -1,5 +1,5 @@
 use super::AudioFileColumn;
-use crate::domain::{Album, Recording};
+use crate::domain::{Album, Track};
 use cursive_table_view::TableViewItem;
 use std::{
     cmp::Ordering,
@@ -11,7 +11,7 @@ pub struct AlbumView {
     pub id: String,
     pub album_id: String,
     pub album: Arc<Mutex<Album>>,
-    pub recording: Option<Arc<Mutex<Recording>>>,
+    pub tracks: Option<Arc<Mutex<Track>>>,
 }
 
 impl AlbumView {
@@ -22,54 +22,54 @@ impl AlbumView {
         let am = album.clone();
         let album = album.lock().unwrap();
         let album_id = &album.id;
-        let mut recordings: Vec<AlbumView> = album
-            .recordings
+        let mut tracks: Vec<AlbumView> = album
+            .tracks
             .iter()
-            .map(|recording| AlbumView::for_recording(am.clone(), album_id.clone(), recording))
+            .map(|track| AlbumView::for_track(am.clone(), album_id.clone(), track))
             .collect();
-        /*recordings.sort_unstable_by(|a, b| {
+        /*tracks.sort_unstable_by(|a, b| {
             let a = {a.album.lock().unwrap().};
             let b = {};
             a.cmp(b)
         });*/
-        views.append(&mut recordings);
+        views.append(&mut tracks);
 
         views
     }
 
-    pub fn for_recording(
+    pub fn for_track(
         album: Arc<Mutex<Album>>,
         album_id: String,
-        recording: &Arc<Mutex<Recording>>,
+        track: &Arc<Mutex<Track>>,
     ) -> AlbumView {
-        let am = recording.clone();
-        let recording = recording.lock().unwrap();
+        let am = track.clone();
+        let track = track.lock().unwrap();
         Self {
-            id: recording.id.clone(),
+            id: track.id.clone(),
             album_id,
             album,
-            recording: Some(am),
+            tracks: Some(am),
         }
     }
 
     pub fn artist(&self) -> String {
-        match &self.recording {
+        match &self.tracks {
             None => self.album.lock().unwrap().artist.clone(),
-            Some(recording) => recording.lock().unwrap().artist.clone(),
+            Some(track) => track.lock().unwrap().artist.clone(),
         }
     }
 
     pub fn length(&self) -> String {
-        match &self.recording {
+        match &self.tracks {
             None => self.album.lock().unwrap().length.clone(),
-            Some(recording) => recording.lock().unwrap().length.clone(),
+            Some(track) => track.lock().unwrap().length.clone(),
         }
     }
 
     pub fn title(&self) -> String {
-        match &self.recording {
+        match &self.tracks {
             None => self.album.lock().unwrap().title.clone(),
-            Some(recording) => recording.lock().unwrap().title.clone(),
+            Some(track) => track.lock().unwrap().title.clone(),
         }
     }
 }
@@ -82,7 +82,7 @@ impl From<&Arc<Mutex<Album>>> for AlbumView {
             id: album.id.clone(),
             album_id: album.id.clone(),
             album: am,
-            recording: None,
+            tracks: None,
         }
     }
 }

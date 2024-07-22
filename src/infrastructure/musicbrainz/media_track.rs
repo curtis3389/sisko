@@ -1,4 +1,4 @@
-use super::Entity;
+use super::Recording;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -7,6 +7,6 @@ pub struct MediaTrack {
     pub id: String,
     pub number: String,
     pub title: String,
-    pub recording: Entity,
+    pub recording: Recording,
     pub position: i32,
 }

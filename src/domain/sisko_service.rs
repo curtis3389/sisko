@@ -59,11 +59,8 @@ impl SiskoService {
         // load metadata for recording id
         // match audiofile to a release
         // add matched release to album table
-        let recording = AlbumService::instance()
-            .get_recording_for_file(audio_file)
-            .await?;
         let album = AlbumService::instance()
-            .get_album_for_recording(&recording)
+            .get_album_for_file(audio_file)
             .await?;
         UiWrapper::instance().add_album(album);
         Ok(())
