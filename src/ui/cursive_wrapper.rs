@@ -3,6 +3,7 @@ use super::{
     UiEvent, UiEventService, ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, HIDEABLE_BOTTOM_PANEL,
     HIDEABLE_LEFT_PANEL, HIDEABLE_RIGHT_PANEL, METADATA_TABLE,
 };
+use cursive::align::HAlign;
 use cursive::event::{Event, Key};
 use cursive::traits::*;
 use cursive::views::{Button, HideableView, LinearLayout, NamedView, Panel, ResizedView};
@@ -109,7 +110,7 @@ impl CursiveWrapper {
             .column(
                 AudioFileColumn::Length,
                 AudioFileColumn::Length.as_str(),
-                |c| c,
+                |c| c.width(8).align(HAlign::Right),
             )
             .on_select(|s: &mut Cursive, _row: usize, index: usize| {
                 let selected_audio_file = s
@@ -151,7 +152,7 @@ impl CursiveWrapper {
             .column(
                 AudioFileColumn::Length,
                 AudioFileColumn::Length.as_str(),
-                |c| c,
+                |c| c.width(8).align(HAlign::Right),
             )
             .with_name(ALBUM_FILE_TABLE);
 

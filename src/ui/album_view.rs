@@ -1,5 +1,6 @@
 use super::AudioFileColumn;
 use crate::domain::{Album, Track};
+use crate::infrastructure::DurationExtensions;
 use cursive_table_view::TableViewItem;
 use std::{
     cmp::Ordering,
@@ -11,7 +12,7 @@ pub struct AlbumView {
     pub id: String,
     pub album_id: String,
     pub album: Arc<Mutex<Album>>,
-    pub track: Option<Arc<Mutex<Track>>>,
+    pub track_id: Option<String>,
 }
 
 impl AlbumView {
@@ -37,65 +38,63 @@ impl AlbumView {
         views
     }
 
-    pub fn for_track(
-        album: Arc<Mutex<Album>>,
-        album_id: String,
-        track: &Arc<Mutex<Track>>,
-    ) -> AlbumView {
-        let am = track.clone();
-        let track = track.lock().unwrap();
+    pub fn for_track(album: Arc<Mutex<Album>>, album_id: String, track: &Track) -> AlbumView {
         Self {
             id: track.id.clone(),
             album_id,
             album,
-            track: Some(am),
+            track_id: Some(track.id.clone()),
         }
     }
 
     pub fn artist(&self) -> String {
-        match &self.track {
-            None => self.album.lock().unwrap().artist.clone(),
-            Some(track) => track.lock().unwrap().artist.clone(),
+        let album = self.album.lock().unwrap();
+        match &self.track_id {
+            None => album.artist.clone(),
+            Some(track_id) => album.track(track_id).artist.clone(),
         }
     }
 
     pub fn disc_number(&self) -> i32 {
-        match &self.track {
+        let album = self.album.lock().unwrap();
+        match &self.track_id {
             None => 0,
-            Some(track) => track.lock().unwrap().disc_number,
+            Some(track_id) => album.track(track_id).disc_number,
         }
     }
 
     pub fn length(&self) -> String {
-        match &self.track {
-            None => self.album.lock().unwrap().length.clone(),
-            Some(track) => track.lock().unwrap().length.clone(),
+        let album = self.album.lock().unwrap();
+        match &self.track_id {
+            None => album.length.to_pretty_string(),
+            Some(track_id) => album.track(track_id).length.to_pretty_string(),
         }
     }
 
     pub fn number(&self) -> i32 {
-        match &self.track {
+        let album = self.album.lock().unwrap();
+        match &self.track_id {
             None => 0,
-            Some(track) => track.lock().unwrap().number,
+            Some(track_id) => album.track(track_id).number,
         }
     }
 
     pub fn title(&self) -> String {
-        match &self.track {
+        let album = self.album.lock().unwrap();
+        match &self.track_id {
             None => {
-                let album = self.album.lock().unwrap();
                 let all_matched = album
                     .tracks
                     .iter()
-                    .all(|track| !track.lock().unwrap().matched_files.is_empty());
+                    .all(|track| !track.matched_files.is_empty());
                 let icon = match all_matched {
                     true => "⦿", // TODO: use change list to add asterisk above: ⦿⃰ and ⦾⃰
                     false => "⦾",
                 };
                 format!("{} {}", icon, album.title.clone())
             }
-            Some(track) => {
-                let track = track.lock().unwrap();
+            Some(track_id) => {
+                let track = album.track(track_id);
                 let has_match = !track.matched_files.is_empty();
                 let icon = match has_match {
                     true => "█", // TODO: use match rating to use other block characters: ▁, ▂, ▃, ▄, ▅, ▆, ▇
@@ -118,7 +117,7 @@ impl From<&Arc<Mutex<Album>>> for AlbumView {
             id: album.id.clone(),
             album_id: album.id.clone(),
             album: am,
-            track: None,
+            track_id: None,
         }
     }
 }
@@ -149,9 +148,9 @@ impl TableViewItem<AudioFileColumn> for AlbumView {
     {
         match self.album_id.cmp(&other.album_id) {
             Ordering::Equal => {
-                if self.track.is_none() {
+                if self.track_id.is_none() {
                     Ordering::Less
-                } else if other.track.is_none() {
+                } else if other.track_id.is_none() {
                     Ordering::Greater
                 } else {
                     match column {

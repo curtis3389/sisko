@@ -1,6 +1,7 @@
-use super::{Album, AudioFile};
+use super::{Album, AudioFile, Track};
 use crate::infrastructure::acoustid::AcoustIdService;
 use crate::infrastructure::musicbrainz::{MusicBrainzService, Release, ReleaseLookup};
+use crate::infrastructure::{Am, Ram};
 use anyhow::{anyhow, Result};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -16,10 +17,7 @@ impl AlbumService {
         Self {}
     }
 
-    pub async fn get_album_for_file(
-        &self,
-        audio_file: &Arc<Mutex<AudioFile>>,
-    ) -> Result<Arc<Mutex<Album>>> {
+    pub async fn get_album_for_file(&self, audio_file: &Am<AudioFile>) -> Ram<Album> {
         // fingerprint
         let file_path = {
             let audio_file = audio_file
@@ -45,13 +43,13 @@ impl AlbumService {
         // get album
         let release_id = self.get_release_id(&lookup)?;
         let release = lookup.releases.iter().find(|r| r.id == release_id).unwrap();
-        let album = Album::from(release);
-        let track = album
+        let mut album = Album::from(release);
+        let track: &mut Track = album
             .tracks
-            .iter()
-            .find(|t| t.lock().unwrap().recording_id == recordingid)
+            .iter_mut()
+            .find(|t| t.recording_id == recordingid)
             .unwrap();
-        track.lock().unwrap().matched_files.push(audio_file.clone());
+        track.matched_files.push(audio_file.clone());
         Ok(Arc::new(Mutex::new(album)))
     }
 
