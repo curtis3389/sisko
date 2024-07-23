@@ -54,14 +54,10 @@ impl SiskoService {
     }
 
     pub async fn scan_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
-        // get fingerprint for audiofile
-        // get recording id for fingerprint
-        // load metadata for recording id
-        // match audiofile to a release
-        // add matched release to album table
         let album = AlbumService::instance()
             .get_album_for_file(audio_file)
             .await?;
+        UiWrapper::instance().remove_cluster_file(audio_file);
         UiWrapper::instance().add_album(album);
         Ok(())
     }

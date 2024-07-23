@@ -3,9 +3,12 @@ use crate::infrastructure::acoustid::AcoustIdService;
 use crate::infrastructure::musicbrainz::{MusicBrainzService, Release, ReleaseLookup};
 use crate::infrastructure::{Am, Ram};
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-pub struct AlbumService {}
+pub struct AlbumService {
+    albums: Mutex<HashMap<String, Am<Album>>>,
+}
 
 impl AlbumService {
     pub fn instance() -> &'static Self {
@@ -14,7 +17,9 @@ impl AlbumService {
     }
 
     pub fn new() -> Self {
-        Self {}
+        Self {
+            albums: Mutex::new(HashMap::new()),
+        }
     }
 
     pub async fn get_album_for_file(&self, audio_file: &Am<AudioFile>) -> Ram<Album> {
@@ -41,19 +46,36 @@ impl AlbumService {
             .await?;
 
         // get album
-        let release_id = self.get_release_id(&lookup)?;
-        let release = lookup.releases.iter().find(|r| r.id == release_id).unwrap();
-        let mut album = Album::from(release);
-        let track: &mut Track = album
-            .tracks
-            .iter_mut()
-            .find(|t| t.recording_id == recordingid)
-            .unwrap();
-        track.matched_files.push(audio_file.clone());
-        Ok(Arc::new(Mutex::new(album)))
+        let albums = self.load_lookup(&lookup);
+        let album = self.choose_album(&albums)?;
+        {
+            let tracks = &mut album.lock().unwrap().tracks;
+            let track: &mut Track = tracks
+                .iter_mut()
+                .find(|t| t.recording_id == recordingid)
+                .unwrap();
+            track.matched_files.push(audio_file.clone());
+        }
+        Ok(album)
     }
 
-    fn get_release_id(&self, lookup: &ReleaseLookup) -> Result<String> {
+    pub fn load_lookup(&self, lookup: &ReleaseLookup) -> Vec<Am<Album>> {
+        lookup
+            .releases
+            .iter()
+            .map(|r| self.load_release(r))
+            .collect()
+    }
+
+    pub fn load_release(&self, release: &Release) -> Am<Album> {
+        let album = Album::from(release);
+        let album_id = album.id.clone();
+        let album = Arc::new(Mutex::new(album));
+        self.albums.lock().unwrap().insert(album_id, album.clone());
+        album
+    }
+
+    fn choose_album(&self, albums: &[Am<Album>]) -> Result<Am<Album>> {
         /*let (release, _) = lookup
             .releases
             .iter()
@@ -61,7 +83,7 @@ impl AlbumService {
             .max_by(|(_, p1), (_, p2)| p1.total_cmp(p2))
             .unwrap();
         Ok(release.id.clone())*/
-        Ok(lookup.releases.first().unwrap().id.clone())
+        Ok(albums[0].clone())
     }
 
     fn get_priority(&self, release: &Release) -> f64 {

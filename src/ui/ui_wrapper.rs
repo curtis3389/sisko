@@ -123,6 +123,27 @@ impl UiWrapper {
             .expect("Error sending callback to open tag field dialog!");
     }
 
+    pub fn remove_cluster_file(&self, audio_file: &Arc<Mutex<AudioFile>>) {
+        let path = audio_file.lock().unwrap().file.absolute_path.clone();
+        CbSinkService::instance()
+            .send(Box::new(move |s: &mut Cursive| {
+                s.call_on_name(
+                    CLUSTER_FILE_TABLE,
+                    |table: &mut TableView<AudioFileView, AudioFileColumn>| {
+                        if let Some((index, _)) = table
+                            .borrow_items()
+                            .iter()
+                            .enumerate()
+                            .find(|(_, item)| item.path == path)
+                        {
+                            table.remove_item(index);
+                        }
+                    },
+                );
+            }))
+            .unwrap();
+    }
+
     pub fn set_metadata_table(&self, audio_file: &Arc<Mutex<AudioFile>>) {
         let arc = audio_file;
         let audio_file = audio_file.lock().expect("Failed to lock audio file mutex!");

@@ -27,7 +27,7 @@ impl Track {
                 .map(|a| a.artist.name.clone())
                 .unwrap_or_default(),
             length,
-            number: track.number.parse::<i32>().unwrap(),
+            number: track.number.parse::<i32>().unwrap_or_default(),
             disc_number: media.position,
             matched_files: Vec::new(),
             recording_id: track.recording.id.clone(),
