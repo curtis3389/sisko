@@ -1,4 +1,6 @@
-use super::{ArtistCredit, CoverArtArchive, Media, ReleaseEvent, TextRepresentation};
+use super::{
+    ArtistCredit, CoverArtArchive, LabelInfo, Media, ReleaseEvent, ReleaseGroup, TextRepresentation,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -26,4 +28,8 @@ pub struct Release {
     #[serde(rename = "release-events")]
     pub release_events: Vec<ReleaseEvent>,
     pub country: String,
+    #[serde(rename = "release-group")]
+    pub release_group: ReleaseGroup,
+    #[serde(rename = "label-info")]
+    pub label_info: Vec<LabelInfo>,
 }

@@ -12,4 +12,5 @@ pub struct Recording {
     #[serde(rename = "artist-credit")]
     pub artist_credit: Vec<ArtistCredit>,
     pub disambiguation: String,
+    pub isrcs: Vec<String>,
 }

@@ -263,7 +263,10 @@ impl From<&ID3v2Frame> for TagField {
                 value,
             } => TagField::Text(TagFieldType::from(frame), value[0].clone(), None),
             ID3v2FrameFields::UniqueFileIdentifierFields { owner_id: _, id } => {
-                TagField::Binary(TagFieldType::from(frame), id.clone(), None)
+                match String::from_utf8(id.clone()) {
+                    Ok(s) => TagField::Text(TagFieldType::from(frame), s, None),
+                    Err(_) => TagField::Binary(TagFieldType::from(frame), id.clone(), None),
+                }
             }
             _ => TagField::Unknown(TagFieldType::from(frame), String::new()),
         }

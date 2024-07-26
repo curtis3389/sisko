@@ -1,4 +1,4 @@
-use super::{Album, AudioFile, Track};
+use super::{Album, AudioFile};
 use crate::infrastructure::acoustid::AcoustIdService;
 use crate::infrastructure::musicbrainz::{MusicBrainzService, Release, ReleaseLookup};
 use crate::infrastructure::{Am, Ram};
@@ -39,6 +39,13 @@ impl AlbumService {
 
         // recording
         let recordingid = lookup[0].recordings[0].id.clone();
+        {
+            let mut audio_file = audio_file
+                .lock()
+                .map_err(|_| anyhow!("Error locking audio file mutex!"))?;
+            audio_file.acoust_id = Some(lookup[0].id.clone());
+            audio_file.recording_id = Some(recordingid.clone());
+        }
 
         // lookup
         let lookup = MusicBrainzService::instance()
@@ -49,12 +56,9 @@ impl AlbumService {
         let albums = self.load_lookup(&lookup);
         let album = self.choose_album(&albums)?;
         {
-            let tracks = &mut album.lock().unwrap().tracks;
-            let track: &mut Track = tracks
-                .iter_mut()
-                .find(|t| t.recording_id == recordingid)
-                .unwrap();
-            track.matched_files.push(audio_file.clone());
+            let mut album = album.lock().unwrap();
+            album.match_file(audio_file);
+            album.update_tag_fields(audio_file);
         }
         Ok(album)
     }

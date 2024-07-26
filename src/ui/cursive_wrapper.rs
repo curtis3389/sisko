@@ -154,6 +154,18 @@ impl CursiveWrapper {
                 AudioFileColumn::Length.as_str(),
                 |c| c.width(8).align(HAlign::Right),
             )
+            .on_select(|s: &mut Cursive, _row: usize, index: usize| {
+                let selected_album_view = s
+                    .call_on_name(
+                        ALBUM_FILE_TABLE,
+                        |table_view: &mut TableView<AlbumView, AudioFileColumn>| {
+                            let item = table_view.borrow_item(index).unwrap();
+                            item.clone()
+                        },
+                    )
+                    .unwrap();
+                UiEventService::instance().send(UiEvent::SelectAlbumView(selected_album_view));
+            })
             .with_name(ALBUM_FILE_TABLE);
 
         let metadata_table = TableView::<TagFieldView, TagFieldColumn>::new()

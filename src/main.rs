@@ -140,6 +140,15 @@ pub async fn run_gui() {
                 }
             });
         }
+        UiEvent::SelectAlbumView(album_view) => {
+            let album = album_view.album.lock().unwrap();
+            if let Some(track_id) = &album_view.track_id {
+                let track = album.track(track_id);
+                if let Some(audio_file) = track.matched_files.first() {
+                    SiskoService::instance().select_audio_file(audio_file)
+                }
+            }
+        }
         UiEvent::SelectClusterFile(audio_file_view) => {
             SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
         }

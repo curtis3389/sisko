@@ -37,7 +37,7 @@ impl MusicBrainzService {
         let client = reqwest::Client::new();
         let response = client
             .get(format!(
-                "https://musicbrainz.org/ws/2/release?recording={}&fmt=json&inc=recordings+release-groups+media+isrcs+artist-credits",
+                "https://musicbrainz.org/ws/2/release?recording={}&fmt=json&inc=recordings+release-groups+media+isrcs+artist-credits+labels",
                 recording_id
             ))
             .header(USER_AGENT, "sisko/0.1 (curtis.hollibaugh@protonmail.ch)")

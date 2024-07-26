@@ -3,8 +3,12 @@ use crate::domain::{File, Tag, TagField, TagType};
 /// Represents a file that contains audio data recognized by sisko.
 #[derive(Clone, Debug)]
 pub struct AudioFile {
+    pub acoust_id: Option<String>,
+
     /// The file that contains audio data.
     pub file: File,
+
+    pub recording_id: Option<String>,
 
     /// The metadata tags on the file.
     pub tags: Vec<Tag>,
@@ -18,7 +22,12 @@ impl AudioFile {
     /// * `file` - The file that contains audio data.
     /// * `tags` - The metadata tags from the file.
     pub fn new(file: File, tags: Vec<Tag>) -> Self {
-        Self { file, tags }
+        Self {
+            acoust_id: None,
+            file,
+            recording_id: None,
+            tags,
+        }
     }
 
     /// Returns the artist of the audio, if any.

@@ -34,6 +34,22 @@ impl Tag {
             .next()
     }
 
+    pub fn get_field(&self, field_type: TagFieldType) -> Option<&TagField> {
+        self.fields
+            .iter()
+            .find(|field| field.tag_field_type() == field_type)
+    }
+
+    pub fn set_new_text_value(&mut self, field_type: TagFieldType, new_value: String) {
+        if let TagField::Text(t, v, _) = match self.get_field(field_type.clone()) {
+            Some(field) => field.clone(),
+            None => TagField::Text(field_type.clone(), String::new(), None),
+        } {
+            let field = TagField::Text(t, v, Some(new_value));
+            self.update_field(field);
+        }
+    }
+
     /// Returns the value of the track title field, if there is one.
     pub fn title(&self) -> Option<String> {
         self.fields
@@ -48,19 +64,17 @@ impl Tag {
     /// Updates a field with the given new field data.
     /// This will update the field with the same type as the given field.
     pub fn update_field(&mut self, tag_field: TagField) {
-        let (index, _) = self
+        if let Some((index, _)) = self
             .fields
             .iter()
             .enumerate()
             .find(|(_, field)| field.tag_field_type() == tag_field.tag_field_type())
-            .unwrap_or_else(|| {
-                panic!(
-                    "Error trying to update tag field {} that's not in the tag!",
-                    tag_field.tag_field_type()
-                )
-            });
-        self.fields.remove(index);
-        self.fields.insert(index, tag_field);
+        {
+            self.fields.remove(index);
+            self.fields.insert(index, tag_field);
+        } else {
+            self.fields.push(tag_field);
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use super::{AudioFileView, TagFieldView};
+use super::{AlbumView, AudioFileView, TagFieldView};
 use crate::domain::{AudioFile, File};
 use std::sync::{Arc, Mutex};
 
@@ -10,6 +10,7 @@ pub enum UiEvent {
     OpenAddFolder,
     OpenLogs,
     ScanAudioFile(Arc<Mutex<AudioFile>>),
+    SelectAlbumView(AlbumView),
     SelectClusterFile(AudioFileView),
     SubmitClusterFile(AudioFileView),
     SubmitMetadataRow(TagFieldView),
