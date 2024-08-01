@@ -1,5 +1,6 @@
 use crate::domain::AudioFile;
 use crate::ui::AudioFileColumn;
+use anyhow::{anyhow, Result};
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -23,17 +24,21 @@ pub struct AudioFileView {
     pub path: PathBuf,
 }
 
-impl From<&Arc<Mutex<AudioFile>>> for AudioFileView {
-    fn from(audio_file: &Arc<Mutex<AudioFile>>) -> Self {
+impl TryFrom<&Arc<Mutex<AudioFile>>> for AudioFileView {
+    type Error = anyhow::Error;
+
+    fn try_from(audio_file: &Arc<Mutex<AudioFile>>) -> Result<Self> {
         let mutex = audio_file.clone();
-        let audio_file = audio_file.lock().expect("Failed to lock audio file mutex!");
-        Self {
+        let audio_file = audio_file
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock audio file mutex!"))?;
+        Ok(Self {
             title: audio_file.title().unwrap_or("<no title>".to_string()),
             artist: audio_file.artist().unwrap_or("<no artist>".to_string()),
             length: audio_file.length().unwrap_or("?:??".to_string()),
             audio_file: mutex,
             path: audio_file.file.absolute_path.clone(),
-        }
+        })
     }
 }
 

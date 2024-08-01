@@ -1,6 +1,8 @@
 use crate::domain::{AudioFile, TagField, TagFieldType, TagType};
 use crate::ui::TagFieldColumn;
+use anyhow::{anyhow, Result};
 use cursive_table_view::TableViewItem;
+use log::error;
 use std::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 
@@ -38,34 +40,35 @@ impl TagFieldView {
     }
 
     /// Returns the tag field referred to by this view.
-    pub fn get_field(&self) -> TagField {
+    pub fn get_field(&self) -> Result<TagField> {
         let audio_file = self
             .audio_file
             .lock()
-            .expect("Error locking a audio file mutex!");
+            .map_err(|_| anyhow!("Error locking audio files mutex!"))?;
         let tag = audio_file
             .tags
             .iter()
             .find(|tag| tag.tag_type == self.tag_type)
-            .unwrap_or_else(|| {
-                panic!(
+            .ok_or_else(|| {
+                anyhow!(
                     "Couldn't find {} tag in {}!",
                     self.tag_type,
                     audio_file.file.absolute_path.to_string_lossy()
                 )
-            });
-        tag.fields
+            })?;
+        Ok(tag
+            .fields
             .iter()
             .find(|f| f.tag_field_type() == self.tag_field_type)
-            .unwrap_or_else(|| {
-                panic!(
+            .ok_or_else(|| {
+                anyhow!(
                     "Couldn't find {} field in {} tag in {}!",
                     self.tag_field_type,
                     self.tag_type,
                     audio_file.file.absolute_path.to_string_lossy()
                 )
-            })
-            .clone()
+            })?
+            .clone())
     }
 }
 
@@ -76,10 +79,17 @@ impl TableViewItem<TagFieldColumn> for TagFieldView {
     ///
     /// * `column` - The column to get the value of.
     fn to_column(&self, column: TagFieldColumn) -> String {
-        match column {
-            TagFieldColumn::Tag => self.get_field().display_name(),
-            TagFieldColumn::OriginalValue => self.get_field().display_value(),
-            TagFieldColumn::NewValue => self.get_field().display_new_value(),
+        let s = match column {
+            TagFieldColumn::Tag => self.get_field().map(|f| f.display_name()),
+            TagFieldColumn::OriginalValue => self.get_field().map(|f| f.display_value()),
+            TagFieldColumn::NewValue => self.get_field().map(|f| f.display_new_value()),
+        };
+        match s {
+            Ok(s) => s,
+            Err(e) => {
+                // TODO: log error
+                e.to_string()
+            }
         }
     }
 
@@ -93,12 +103,23 @@ impl TableViewItem<TagFieldColumn> for TagFieldView {
     where
         Self: Sized,
     {
-        let field = self.get_field();
-        let other = other.get_field();
-        match column {
-            TagFieldColumn::Tag => field.display_name().cmp(&other.display_name()),
-            TagFieldColumn::OriginalValue => field.display_value().cmp(&other.display_value()),
-            TagFieldColumn::NewValue => field.display_new_value().cmp(&other.display_new_value()),
+        let result = (|| -> Result<Ordering> {
+            let field = self.get_field()?;
+            let other = other.get_field()?;
+            Ok(match column {
+                TagFieldColumn::Tag => field.display_name().cmp(&other.display_name()),
+                TagFieldColumn::OriginalValue => field.display_value().cmp(&other.display_value()),
+                TagFieldColumn::NewValue => {
+                    field.display_new_value().cmp(&other.display_new_value())
+                }
+            })
+        })();
+        match result {
+            Ok(o) => o,
+            Err(e) => {
+                error!("Error comparing tag field views: {e}!");
+                Ordering::Less
+            }
         }
     }
 }

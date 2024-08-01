@@ -53,17 +53,19 @@ impl AlbumService {
             .await?;
 
         // get album
-        let albums = self.load_lookup(&lookup);
+        let albums = self.load_lookup(&lookup)?;
         let album = self.choose_album(&albums)?;
         {
-            let mut album = album.lock().unwrap();
-            album.match_file(audio_file);
-            album.update_tag_fields(audio_file);
+            let mut album = album
+                .lock()
+                .map_err(|_| anyhow!("Error locking album mutex!"))?;
+            album.match_file(audio_file)?;
+            album.update_tag_fields(audio_file)?;
         }
         Ok(album)
     }
 
-    pub fn load_lookup(&self, lookup: &ReleaseLookup) -> Vec<Am<Album>> {
+    pub fn load_lookup(&self, lookup: &ReleaseLookup) -> Result<Vec<Am<Album>>> {
         lookup
             .releases
             .iter()
@@ -71,12 +73,15 @@ impl AlbumService {
             .collect()
     }
 
-    pub fn load_release(&self, release: &Release) -> Am<Album> {
+    pub fn load_release(&self, release: &Release) -> Result<Am<Album>> {
         let album = Album::from(release);
         let album_id = album.id.clone();
         let album = Arc::new(Mutex::new(album));
-        self.albums.lock().unwrap().insert(album_id, album.clone());
-        album
+        self.albums
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock albums mutex!"))?
+            .insert(album_id, album.clone());
+        Ok(album)
     }
 
     fn choose_album(&self, albums: &[Am<Album>]) -> Result<Am<Album>> {

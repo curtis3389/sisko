@@ -60,7 +60,12 @@ impl FileService {
             name: path
                 .file_name()
                 .map(|name| name.to_os_string())
-                .expect("Every file looked at should have a filename!")
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Error getting name for file at path {}!",
+                        path.to_string_lossy()
+                    )
+                })?
                 .into_string()
                 .unwrap_or(String::from("<invalid unicode>")),
             size: metadata.as_ref().map(|metadata| metadata.len()),

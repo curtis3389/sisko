@@ -1,4 +1,5 @@
 use crate::domain::TagFieldType;
+use anyhow::Result;
 use base64::prelude::*;
 use itertools::Itertools;
 use regex::Regex;
@@ -111,12 +112,13 @@ impl TagField {
                     .sorted_by(|(g1, _), (g2, _)| g1.cmp(g2))
                     .chunk_by(|(g, _)| g)
                     .into_iter()
-                    .map(|(g, v)| -> TagField {
+                    .map(|(g, v)| -> Result<TagField> {
                         let v: Vec<&ID3v2Frame> = v.map(|(_, f)| *f).collect();
                         match g {
                             PartialFrameGroup::Date => TagField::date(v),
                         }
-                    }),
+                    })
+                    .filter_map(|x| x.ok()),
             )
             .collect()
     }
@@ -126,35 +128,41 @@ impl TagField {
     /// # Arguments
     ///
     /// * `frames` - The frames to parse the date field from (i.e. TYER and TDAT).
-    pub fn date(frames: Vec<&ID3v2Frame>) -> TagField {
+    pub fn date(frames: Vec<&ID3v2Frame>) -> Result<TagField> {
         let tyer = frames
             .iter()
             .find(|frame| frame.header.frame_id == "TYER")
-            .map(|frame| match &frame.fields {
-                ID3v2FrameFields::TextFields { encoding: _, text } => String::from(&text[0]),
-                _ => todo!(),
-            })
-            .unwrap_or(String::new());
-        let regex = Regex::new("(\\d{2})(\\d{2})").unwrap();
+            .and_then(|frame| match &frame.fields {
+                ID3v2FrameFields::TextFields { encoding: _, text } => Some(String::from(&text[0])),
+                _ => {
+                    // TODO: log a warning
+                    None
+                }
+            });
+        let regex = Regex::new("(\\d{2})(\\d{2})")?;
         let mut tdat: Vec<String> = frames
             .iter()
             .find(|frame| frame.header.frame_id == "TDAT")
-            .map(|frame| match &frame.fields {
-                ID3v2FrameFields::TextFields { encoding: _, text } => regex
-                    .captures(&text[0])
-                    .map(|c| {
+            .and_then(|frame| match &frame.fields {
+                ID3v2FrameFields::TextFields { encoding: _, text } => {
+                    regex.captures(&text[0]).map(|c| {
                         c.iter()
                             .skip(1)
                             .filter_map(|c| c.map(|c| c.as_str()).map(String::from))
                             .collect()
                     })
-                    .unwrap_or_default(),
-                _ => todo!(),
+                }
+                _ => {
+                    // TODO: log a warning
+                    None
+                }
             })
             .unwrap_or_default();
-        tdat.push(tyer);
+        if let Some(tyer) = tyer {
+            tdat.push(tyer);
+        }
         let s = tdat.join("/");
-        TagField::Text(TagFieldType::Date, s, None)
+        Ok(TagField::Text(TagFieldType::Date, s, None))
     }
 
     /// Returns the disc number and total discs fields for the given TPOS frame.

@@ -1,5 +1,5 @@
 use super::{AcoustIdResult, Fingerprint};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -22,14 +22,29 @@ impl AcoustIdService {
     pub fn get_fingerprint(&self, path: &Path) -> Result<Fingerprint> {
         let output = Command::new("fpcalc").arg(path).output()?;
         let output = String::from_utf8_lossy(&output.stdout);
-        let regex = Regex::new(r"DURATION=(.*)\nFINGERPRINT=(.*)").unwrap();
+        let regex = Regex::new(r"DURATION=(.*)\nFINGERPRINT=(.*)")?;
         let captures: Vec<String> = regex
             .captures(&output)
-            .unwrap()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Failed to match fpcalc output to expected regex: {}!",
+                    output
+                )
+            })?
             .iter()
             .skip(1)
-            .map(|c| String::from(c.unwrap().as_str()))
-            .collect();
+            .map(|c| {
+                Ok(String::from(
+                    c.ok_or_else(|| {
+                        anyhow!(
+                            "Failed to match fpcalc output to expected regex: {}!",
+                            output
+                        )
+                    })?
+                    .as_str(),
+                ))
+            })
+            .collect::<Result<Vec<String>>>()?;
         Ok(Fingerprint {
             duration: captures[0].clone(),
             fingerprint: captures[1].clone(),

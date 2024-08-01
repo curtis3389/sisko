@@ -1,14 +1,16 @@
 use super::{
-    AlbumView, AudioFileColumn, AudioFileView, CbSinkService, TagFieldColumn, TagFieldView,
-    UiEvent, UiEventService, ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, HIDEABLE_BOTTOM_PANEL,
-    HIDEABLE_LEFT_PANEL, HIDEABLE_RIGHT_PANEL, METADATA_TABLE,
+    AlbumView, AudioFileColumn, AudioFileView, CbSinkService, FileColumn, FileView, TagFieldColumn,
+    TagFieldView, UiEvent, UiEventService, ALBUM_FILE_TABLE, CLUSTER_FILE_TABLE, FILE_TABLE,
+    HIDEABLE_BOTTOM_PANEL, HIDEABLE_LEFT_PANEL, HIDEABLE_RIGHT_PANEL, METADATA_TABLE,
 };
+use anyhow::{anyhow, Result};
 use cursive::align::HAlign;
 use cursive::event::{Event, Key};
 use cursive::traits::*;
 use cursive::views::{Button, HideableView, LinearLayout, NamedView, Panel, ResizedView};
 use cursive::{menu, Cursive, CursiveRunnable};
 use cursive_table_view::TableView;
+use log::error;
 use std::sync::Mutex;
 
 type TablePanel<Row, Column> = HideableView<Panel<ResizedView<NamedView<TableView<Row, Column>>>>>;
@@ -28,7 +30,7 @@ impl CursiveWrapper {
         Self::setup_menubar(&mut root);
         Self::add_widgets(&mut root);
 
-        CbSinkService::set_instance(root.cb_sink().clone());
+        CbSinkService::set_instance(root.cb_sink().clone()).unwrap();
 
         CursiveWrapper {
             root: Mutex::new(root),
@@ -81,7 +83,9 @@ impl CursiveWrapper {
             .add_subtree(
                 "View",
                 menu::Tree::new().leaf("Logs", |_| {
-                    UiEventService::instance().send(UiEvent::OpenLogs);
+                    if let Err(e) = UiEventService::instance().send(UiEvent::OpenLogs) {
+                        error!("Error sending open logs event to UI: {e}!");
+                    }
                 }),
             )
             .add_subtree("Options", menu::Tree::new())
@@ -113,28 +117,20 @@ impl CursiveWrapper {
                 |c| c.width(8).align(HAlign::Right),
             )
             .on_select(|s: &mut Cursive, _row: usize, index: usize| {
-                let selected_audio_file = s
-                    .call_on_name(
-                        CLUSTER_FILE_TABLE,
-                        |table_view: &mut TableView<AudioFileView, AudioFileColumn>| {
-                            let item = table_view.borrow_item(index).unwrap();
-                            item.clone()
-                        },
-                    )
-                    .unwrap();
-                UiEventService::instance().send(UiEvent::SelectClusterFile(selected_audio_file));
+                if let Err(e) = (|| {
+                    let selected_audio_file = s.clone_audio_file_view(index)?;
+                    UiEventService::instance().send(UiEvent::SelectClusterFile(selected_audio_file))
+                })() {
+                    error!("Error sending select cluster file event: {e}!");
+                }
             })
             .on_submit(|s: &mut Cursive, _row: usize, index: usize| {
-                let selected_audio_file = s
-                    .call_on_name(
-                        CLUSTER_FILE_TABLE,
-                        |table_view: &mut TableView<AudioFileView, AudioFileColumn>| {
-                            let item = table_view.borrow_item(index).unwrap();
-                            item.clone()
-                        },
-                    )
-                    .unwrap();
-                UiEventService::instance().send(UiEvent::SubmitClusterFile(selected_audio_file));
+                if let Err(e) = (|| {
+                    let selected_audio_file = s.clone_audio_file_view(index)?;
+                    UiEventService::instance().send(UiEvent::SubmitClusterFile(selected_audio_file))
+                })() {
+                    error!("Error sending submit cluster file event: {e}!");
+                }
             })
             .with_name(CLUSTER_FILE_TABLE);
 
@@ -155,16 +151,12 @@ impl CursiveWrapper {
                 |c| c.width(8).align(HAlign::Right),
             )
             .on_select(|s: &mut Cursive, _row: usize, index: usize| {
-                let selected_album_view = s
-                    .call_on_name(
-                        ALBUM_FILE_TABLE,
-                        |table_view: &mut TableView<AlbumView, AudioFileColumn>| {
-                            let item = table_view.borrow_item(index).unwrap();
-                            item.clone()
-                        },
-                    )
-                    .unwrap();
-                UiEventService::instance().send(UiEvent::SelectAlbumView(selected_album_view));
+                if let Err(e) = (|| {
+                    let selected_album_view = s.clone_album_view(index)?;
+                    UiEventService::instance().send(UiEvent::SelectAlbumView(selected_album_view))
+                })() {
+                    error!("Error sending select album view event: {e}!");
+                }
             })
             .with_name(ALBUM_FILE_TABLE);
 
@@ -181,16 +173,12 @@ impl CursiveWrapper {
                 |c| c,
             )
             .on_submit(|s: &mut Cursive, _row: usize, index: usize| {
-                let selected_field = s
-                    .call_on_name(
-                        METADATA_TABLE,
-                        |table_view: &mut TableView<TagFieldView, TagFieldColumn>| {
-                            let item = table_view.borrow_item(index).unwrap();
-                            item.clone()
-                        },
-                    )
-                    .unwrap();
-                UiEventService::instance().send(UiEvent::SubmitMetadataRow(selected_field));
+                if let Err(e) = (|| {
+                    let selected_field = s.clone_tag_field_view(index)?;
+                    UiEventService::instance().send(UiEvent::SubmitMetadataRow(selected_field))
+                })() {
+                    error!("Error sending submit metadata row event: {e}!");
+                }
             })
             .with_name(METADATA_TABLE);
 
@@ -206,10 +194,14 @@ impl CursiveWrapper {
             .child(hideable_right_panel);
         let bottom_buttons = LinearLayout::horizontal()
             .child(Button::new("Add Folder", |_| {
-                UiEventService::instance().send(UiEvent::OpenAddFolder);
+                if let Err(e) = UiEventService::instance().send(UiEvent::OpenAddFolder) {
+                    error!("Error sending open add folder event: {e}!");
+                }
             }))
             .child(Button::new("Add Files", |_| {
-                UiEventService::instance().send(UiEvent::OpenAddFile);
+                if let Err(e) = UiEventService::instance().send(UiEvent::OpenAddFile) {
+                    error!("Error sending open add file event: {e}!");
+                }
             }))
             .child(Button::new("Cluster", Cursive::noop))
             .child(Button::new("Lookup", Cursive::noop))
@@ -229,13 +221,94 @@ impl CursiveWrapper {
         &self.root
     }
 
-    pub fn run(self) {
-        self.root.lock().unwrap().run();
+    pub fn run(self) -> Result<()> {
+        self.root
+            .lock()
+            .map_err(|_| anyhow!("Error locking root cursive mutex!"))?
+            .run();
+        Ok(())
     }
 }
 
 impl Default for CursiveWrapper {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub trait CursiveExtensions {
+    fn clone_album_view(&mut self, index: usize) -> Result<AlbumView>;
+    fn clone_audio_file_view(&mut self, index: usize) -> Result<AudioFileView>;
+    fn clone_file_view(&mut self, index: usize) -> Result<FileView>;
+    fn clone_tag_field_view(&mut self, index: usize) -> Result<TagFieldView>;
+}
+
+impl CursiveExtensions for Cursive {
+    fn clone_album_view(&mut self, index: usize) -> Result<AlbumView> {
+        self.call_on_name(
+            ALBUM_FILE_TABLE,
+            |table_view: &mut TableView<AlbumView, AudioFileColumn>| -> Result<AlbumView> {
+                let item = table_view.borrow_item(index).ok_or_else(|| {
+                    anyhow!(
+                        "Failed to find item at index {} in {}!",
+                        index,
+                        ALBUM_FILE_TABLE
+                    )
+                })?;
+                Ok(item.clone())
+            },
+        )
+        .ok_or_else(|| anyhow!("Failed to call lambda on {}!", ALBUM_FILE_TABLE))
+        .and_then(|r| r)
+    }
+
+    fn clone_audio_file_view(&mut self, index: usize) -> Result<AudioFileView> {
+        self.call_on_name(
+            CLUSTER_FILE_TABLE,
+            |table_view: &mut TableView<AudioFileView, AudioFileColumn>| -> Result<AudioFileView> {
+                let item = table_view.borrow_item(index).ok_or_else(|| {
+                    anyhow!(
+                        "Failed to find item at index {} in {}!",
+                        index,
+                        CLUSTER_FILE_TABLE
+                    )
+                })?;
+                Ok(item.clone())
+            },
+        )
+        .ok_or_else(|| anyhow!("Failed to call lambda on {}!", CLUSTER_FILE_TABLE))
+        .and_then(|r| r)
+    }
+
+    fn clone_file_view(&mut self, index: usize) -> Result<FileView> {
+        self.call_on_name(
+            FILE_TABLE,
+            |table_view: &mut TableView<FileView, FileColumn>| -> Result<FileView> {
+                let item = table_view.borrow_item(index).ok_or_else(|| {
+                    anyhow!("Failed to find item at index {} in {}!", index, FILE_TABLE)
+                })?;
+                Ok(item.clone())
+            },
+        )
+        .ok_or_else(|| anyhow!("Failed to call lambda on {}!", FILE_TABLE))
+        .and_then(|r| r)
+    }
+
+    fn clone_tag_field_view(&mut self, index: usize) -> Result<TagFieldView> {
+        self.call_on_name(
+            METADATA_TABLE,
+            |table_view: &mut TableView<TagFieldView, TagFieldColumn>| -> Result<TagFieldView> {
+                let item = table_view.borrow_item(index).ok_or_else(|| {
+                    anyhow!(
+                        "Failed to find item at index {} in {}!",
+                        index,
+                        METADATA_TABLE
+                    )
+                })?;
+                Ok(item.clone())
+            },
+        )
+        .ok_or_else(|| anyhow!("Failed to call lambda on {}!", METADATA_TABLE))
+        .and_then(|r| r)
     }
 }

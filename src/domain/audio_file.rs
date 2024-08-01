@@ -1,4 +1,5 @@
 use crate::domain::{File, Tag, TagField, TagType};
+use anyhow::{anyhow, Result};
 
 /// Represents a file that contains audio data recognized by sisko.
 #[derive(Clone, Debug)]
@@ -51,17 +52,18 @@ impl AudioFile {
     ///
     /// * `tag_type` - The type of the tag to update the field of.
     /// * `tag_field` - The tag field data to update with.
-    pub fn update_tag_field(&mut self, tag_type: &TagType, tag_field: TagField) {
+    pub fn update_tag_field(&mut self, tag_type: &TagType, tag_field: TagField) -> Result<()> {
         let tag = self
             .tags
             .iter_mut()
             .find(|t| t.tag_type == *tag_type)
-            .unwrap_or_else(|| {
-                panic!(
+            .ok_or_else(|| {
+                anyhow!(
                     "Error trying to update {} tag that's not in the audio file!",
                     tag_type
                 )
-            });
+            })?;
         tag.update_field(tag_field);
+        Ok(())
     }
 }

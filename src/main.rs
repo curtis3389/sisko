@@ -4,7 +4,7 @@ pub mod ui;
 
 use crate::domain::SiskoService;
 use crate::ui::{CursiveWrapper, UiEvent, UiEventService, UiWrapper};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Command;
 use domain::LogHistory;
 use log::{error, info, LevelFilter};
@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     config_logger()?;
     let matches = cli().get_matches();
     match matches.subcommand() {
-        None => run_gui().await,
+        None => run_gui().await?,
         _ => run_test(),
     }
     Ok(())
@@ -51,7 +51,7 @@ impl<'a> std::io::Write for MemoryWriter<'a> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        todo!()
+        Ok(())
     }
 }
 
@@ -71,15 +71,16 @@ impl MemoryAppender {
 
 impl Append for MemoryAppender {
     fn append(&self, record: &log::Record) -> anyhow::Result<()> {
-        let mut memory = self.memory.lock().unwrap();
+        let mut memory = self
+            .memory
+            .lock()
+            .map_err(|_| anyhow!("Error locking memory mutex!"))?;
         let mut writer = MemoryWriter::new(&mut memory);
         self.encoder.encode(&mut writer, record)?;
         Ok(())
     }
 
-    fn flush(&self) {
-        todo!()
-    }
+    fn flush(&self) {}
 }
 
 pub fn config_logger() -> Result<()> {
@@ -114,54 +115,62 @@ pub fn cli() -> Command {
 }
 
 /// Runs the program's cursive UI.
-pub async fn run_gui() {
+pub async fn run_gui() -> Result<()> {
     // create ui
     let cursive = CursiveWrapper::new();
 
     // bind ui to event-handling thread with a callback
-    UiEventService::instance().subscribe(Box::new(move |event| match event {
-        UiEvent::OpenLogs => SiskoService::instance().open_logs(),
-        UiEvent::FileSelected(file) => SiskoService::instance().add_file(file.clone()).unwrap(),
-        UiEvent::FolderSelected(folder) => {
-            SiskoService::instance().add_folder(folder.clone()).unwrap()
-        }
-        UiEvent::OpenAddFile => UiWrapper::instance().open_file_dialog(),
-        UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
-        UiEvent::ScanAudioFile(audio_file) => {
-            let audio_file = audio_file.clone();
-            tokio::spawn(async move {
-                match SiskoService::instance().scan_audio_file(&audio_file).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("{}", e);
-                        error!("{}", e.root_cause());
-                        error!("{}", e.backtrace());
+    UiEventService::instance().subscribe(Box::new(move |event| {
+        let result = match event {
+            UiEvent::OpenLogs => SiskoService::instance().open_logs(),
+            UiEvent::FileSelected(file) => SiskoService::instance().add_file(file.clone()),
+            UiEvent::FolderSelected(folder) => SiskoService::instance().add_folder(folder.clone()),
+            UiEvent::OpenAddFile => UiWrapper::instance().open_file_dialog(),
+            UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
+            UiEvent::ScanAudioFile(audio_file) => {
+                let audio_file = audio_file.clone();
+                tokio::spawn(async move {
+                    match SiskoService::instance().scan_audio_file(&audio_file).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("{}", e);
+                            error!("{}", e.root_cause());
+                            error!("{}", e.backtrace());
+                        }
                     }
-                }
-            });
-        }
-        UiEvent::SelectAlbumView(album_view) => {
-            let album = album_view.album.lock().unwrap();
-            if let Some(track_id) = &album_view.track_id {
-                let track = album.track(track_id);
-                if let Some(audio_file) = track.matched_files.first() {
-                    SiskoService::instance().select_audio_file(audio_file)
-                }
+                });
+                Ok(())
             }
+            UiEvent::SelectAlbumView(album_view) => album_view
+                .album
+                .lock()
+                .map_err(|_| anyhow!("Error locking album mutex!"))
+                .and_then(|album| {
+                    if let Some(track_id) = &album_view.track_id {
+                        let track = album.track(track_id)?;
+                        if let Some(audio_file) = track.matched_files.first() {
+                            SiskoService::instance().select_audio_file(audio_file)?;
+                        }
+                    }
+                    Ok(())
+                }),
+            UiEvent::SelectClusterFile(audio_file_view) => {
+                SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
+            }
+            UiEvent::SubmitClusterFile(audio_file_view) => {
+                UiWrapper::instance().open_audio_file_dialog(audio_file_view)
+            }
+            UiEvent::SubmitMetadataRow(tag_field_view) => {
+                UiWrapper::instance().open_tag_field_dialog(tag_field_view)
+            }
+        };
+        if let Err(error) = result {
+            error!("Error processing event {event}: {error}!");
         }
-        UiEvent::SelectClusterFile(audio_file_view) => {
-            SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
-        }
-        UiEvent::SubmitClusterFile(audio_file_view) => {
-            UiWrapper::instance().open_audio_file_dialog(audio_file_view)
-        }
-        UiEvent::SubmitMetadataRow(tag_field_view) => {
-            UiWrapper::instance().open_tag_field_dialog(tag_field_view)
-        }
-    }));
+    }))?;
 
     info!("Running GUI.");
-    cursive.run();
+    cursive.run()
 }
 
 /// Runs a test.

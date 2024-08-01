@@ -1,5 +1,6 @@
 use super::{AudioFile, TagFieldType, Track};
 use crate::infrastructure::{musicbrainz::Release, Am};
+use anyhow::{anyhow, Result};
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
@@ -25,35 +26,61 @@ pub struct Album {
 }
 
 impl Album {
-    pub fn match_file(&mut self, audio_file: &Am<AudioFile>) {
+    pub fn match_file(&mut self, audio_file: &Am<AudioFile>) -> Result<()> {
         let recording_id = audio_file
             .lock()
-            .unwrap()
+            .map_err(|_| anyhow!("Error locking audio file mutex!"))?
             .recording_id
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| anyhow!("Error! Can't match an audio file missing a recording ID!"))?
             .clone();
         let track: &mut Track = self
             .tracks
             .iter_mut()
             .find(|t| t.recording_id == recording_id)
-            .unwrap();
+            .ok_or_else(|| {
+                anyhow!(
+                    "Failed to find match for recording ID {} in album {}!",
+                    recording_id,
+                    self.id
+                )
+            })?;
         track.matched_files.push(audio_file.clone());
+        Ok(())
     }
 
-    pub fn track(&self, id: &str) -> &Track {
-        self.tracks.iter().find(|t| t.id == id).unwrap()
+    pub fn track(&self, id: &str) -> Result<&Track> {
+        self.tracks.iter().find(|t| t.id == id).ok_or_else(|| {
+            anyhow!(
+                "Failed to find a track with ID {} in album {}!",
+                id,
+                self.id
+            )
+        })
     }
 
-    pub fn update_tag_fields(&self, audio_file: &Am<AudioFile>) {
-        let mut audio_file = audio_file.lock().unwrap();
+    pub fn update_tag_fields(&self, audio_file: &Am<AudioFile>) -> Result<()> {
+        let mut audio_file = audio_file
+            .lock()
+            .map_err(|_| anyhow!("Error locking the audio file mutex!"))?;
         let acoust_id = audio_file.acoust_id.clone();
-        let recording_id = audio_file.recording_id.as_ref().unwrap().clone();
+        let recording_id = audio_file
+            .recording_id
+            .as_ref()
+            .ok_or_else(|| anyhow!("Error! Can't update an audio file missing a recording ID!"))?
+            .clone();
         let track = self
             .tracks
             .iter()
             .find(|t| t.recording_id == *recording_id)
-            .unwrap();
+            .ok_or_else(|| {
+                anyhow!(
+                    "Failed to find a matching track for audio file {} with ID {} in album {}!",
+                    audio_file.file.absolute_path.to_string_lossy(),
+                    recording_id,
+                    self.id
+                )
+            })?;
         for tag in &mut audio_file.tags {
             tag.set_new_text_value(TagFieldType::Title, track.title.clone());
             tag.set_new_text_value(TagFieldType::Artist, track.artist.clone());
@@ -114,6 +141,8 @@ impl Album {
                 tag.set_new_text_value(TagFieldType::Script, script.clone());
             }
         }
+
+        Ok(())
     }
 }
 

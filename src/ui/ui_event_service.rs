@@ -1,4 +1,6 @@
 use super::{UiEvent, UiEventHandler};
+use anyhow::{anyhow, Result};
+use log::error;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
@@ -22,9 +24,19 @@ impl UiEventService {
         tokio::spawn(async move {
             let callbacks = cb;
             loop {
-                if let Ok(event) = receiver.recv().await {
-                    for callback in callbacks.lock().unwrap().iter() {
-                        callback(&event);
+                match receiver.recv().await {
+                    Ok(event) => match callbacks.lock() {
+                        Ok(callbacks) => {
+                            for callback in callbacks.iter() {
+                                callback(&event);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to lock UI event callbacks mutex: {}!", e);
+                        }
+                    },
+                    Err(e) => {
+                        error!("Error receiving a UI event from the event channel: {}!", e);
                     }
                 }
             }
@@ -32,12 +44,17 @@ impl UiEventService {
         Self { callbacks, sender }
     }
 
-    pub fn send(&self, event: UiEvent) {
-        self.sender.send(event).unwrap();
+    pub fn send(&self, event: UiEvent) -> Result<()> {
+        self.sender.send(event)?;
+        Ok(())
     }
 
-    pub fn subscribe(&self, callback: UiEventHandler) {
-        self.callbacks.lock().unwrap().push(callback);
+    pub fn subscribe(&self, callback: UiEventHandler) -> Result<()> {
+        self.callbacks
+            .lock()
+            .map_err(|_| anyhow!("Error locking callbacks mutex!"))?
+            .push(callback);
+        Ok(())
     }
 }
 
