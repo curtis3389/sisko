@@ -59,4 +59,22 @@ impl ID3v2ExtendedHeader {
             extended_flag_data,
         }
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let size_bytes = SynchSafeInteger::from(self.size).bytes;
+        let num_bytes = vec![self.number_of_flag_bytes];
+        let flag_bytes = self.extended_flags.to_bytes();
+        let flag_data_bytes: Vec<u8> = self
+            .extended_flag_data
+            .iter()
+            .flat_map(|d| d.to_bytes())
+            .collect();
+
+        let mut header_bytes = vec![];
+        header_bytes.extend(size_bytes);
+        header_bytes.extend(num_bytes);
+        header_bytes.extend(flag_bytes);
+        header_bytes.extend(flag_data_bytes);
+        header_bytes
+    }
 }

@@ -1,4 +1,4 @@
-use crate::is_bit_set;
+use crate::{is_bit_set, set_bit};
 
 /// Represents the restrictions on a tag before encoding.
 #[derive(Clone, Debug)]
@@ -46,6 +46,44 @@ impl ID3v2TagRestrictions {
             image_encoding: ImageEncodingRestriction::from(byte),
             image_size: ImageSizeRestriction::from(byte),
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut byte = 0u8;
+        match self.tag_size {
+            TagSizeRestriction::Max128Frames1MB => {}
+            TagSizeRestriction::Max64Frames128KB => set_bit(&mut byte, 6),
+            TagSizeRestriction::Max32Frames40KB => set_bit(&mut byte, 7),
+            TagSizeRestriction::Max32Frames4KB => {
+                set_bit(&mut byte, 7);
+                set_bit(&mut byte, 6);
+            }
+        }
+        if self.text_encoding == TextEncodingRestriction::Iso88591OrUtf8 {
+            set_bit(&mut byte, 5);
+        }
+        match self.text_field_size {
+            TextFieldSizeRestriction::NoRestrictions => {}
+            TextFieldSizeRestriction::Max1024 => set_bit(&mut byte, 3),
+            TextFieldSizeRestriction::Max128 => set_bit(&mut byte, 4),
+            TextFieldSizeRestriction::Max30 => {
+                set_bit(&mut byte, 4);
+                set_bit(&mut byte, 3);
+            }
+        }
+        if self.image_encoding == ImageEncodingRestriction::PngOrJpeg {
+            set_bit(&mut byte, 2);
+        }
+        match self.image_size {
+            ImageSizeRestriction::NoRestrictions => {}
+            ImageSizeRestriction::Max256 => set_bit(&mut byte, 0),
+            ImageSizeRestriction::Max64 => set_bit(&mut byte, 1),
+            ImageSizeRestriction::Exactly64 => {
+                set_bit(&mut byte, 1);
+                set_bit(&mut byte, 0);
+            }
+        }
+        vec![byte]
     }
 }
 

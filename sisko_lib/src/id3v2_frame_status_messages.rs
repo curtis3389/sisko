@@ -1,4 +1,4 @@
-use crate::is_bit_set;
+use crate::{is_bit_set, set_bit};
 
 /// Represents the status messages flags for a frame in an ID3v2 tag.
 #[derive(Clone, Debug)]
@@ -25,17 +25,31 @@ impl ID3v2FrameStatusMessages {
     ///
     /// ```
     /// # use sisko_lib::id3v2_frame_status_messages::*;
-    /// let status_messages = ID3v2FrameStatusMessages::parse(0b0001_0101);
+    /// let status_messages = ID3v2FrameStatusMessages::parse(0b0001_0000);
     ///
-    /// assert_eq!(status_messages.preserve_on_alter_tag, false);
-    /// assert_eq!(status_messages.preserve_on_alter_file, false);
+    /// assert_eq!(status_messages.preserve_on_alter_tag, true);
+    /// assert_eq!(status_messages.preserve_on_alter_file, true);
     /// assert_eq!(status_messages.is_read_only, true);
     /// ```
     pub fn parse(byte: u8) -> ID3v2FrameStatusMessages {
         ID3v2FrameStatusMessages {
-            preserve_on_alter_tag: is_bit_set(byte, 6),
-            preserve_on_alter_file: is_bit_set(byte, 5),
+            preserve_on_alter_tag: !is_bit_set(byte, 6),
+            preserve_on_alter_file: !is_bit_set(byte, 5),
             is_read_only: is_bit_set(byte, 4),
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut byte = 0u8;
+        if !self.preserve_on_alter_tag {
+            set_bit(&mut byte, 6);
+        }
+        if !self.preserve_on_alter_file {
+            set_bit(&mut byte, 5);
+        }
+        if self.is_read_only {
+            set_bit(&mut byte, 4);
+        }
+        vec![byte]
     }
 }

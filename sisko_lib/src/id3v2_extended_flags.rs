@@ -1,4 +1,4 @@
-use crate::is_bit_set;
+use crate::{is_bit_set, set_bit};
 
 /// Represents the flags in and ID3v2 extended header.
 #[derive(Clone, Debug)]
@@ -57,5 +57,31 @@ impl ID3v2ExtendedFlags {
             unknown_flag_1: is_bit_set(byte, 1),
             unknown_flag_0: is_bit_set(byte, 0),
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut byte = 0u8;
+        if self.is_update {
+            set_bit(&mut byte, 6);
+        }
+        if self.has_crc {
+            set_bit(&mut byte, 5);
+        }
+        if self.has_restrictions {
+            set_bit(&mut byte, 4);
+        }
+        if self.unknown_flag_3 {
+            set_bit(&mut byte, 3);
+        }
+        if self.unknown_flag_2 {
+            set_bit(&mut byte, 2);
+        }
+        if self.unknown_flag_1 {
+            set_bit(&mut byte, 1);
+        }
+        if self.unknown_flag_0 {
+            set_bit(&mut byte, 0);
+        }
+        vec![byte]
     }
 }

@@ -36,8 +36,8 @@ impl ID3v2FrameHeader {
     /// assert_eq!(header.frame_id, "TRCK");
     /// assert_eq!(header.size, 6);
     ///
-    /// assert_eq!(header.flags.status_messages.preserve_on_alter_tag, false);
-    /// assert_eq!(header.flags.status_messages.preserve_on_alter_file, false);
+    /// assert_eq!(header.flags.status_messages.preserve_on_alter_tag, true);
+    /// assert_eq!(header.flags.status_messages.preserve_on_alter_file, true);
     /// assert_eq!(header.flags.status_messages.is_read_only, false);
     ///
     /// assert_eq!(header.flags.format_description.is_in_group, false);
@@ -63,5 +63,17 @@ impl ID3v2FrameHeader {
             size,
             flags,
         })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let id_bytes = self.frame_id.as_bytes().to_vec();
+        let size_bytes = SynchSafeInteger::from(self.size).bytes;
+        let flag_bytes = self.flags.to_bytes();
+
+        let mut header_bytes: Vec<u8> = vec![];
+        header_bytes.extend(id_bytes);
+        header_bytes.extend(size_bytes);
+        header_bytes.extend(flag_bytes);
+        header_bytes
     }
 }

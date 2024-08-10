@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::decode_utf16_strings;
+use crate::{
+    decode_utf16_strings, decode_utf8_strings, encode_iso88591_strings, encode_utf16_strings,
+    encode_utf16bom_strings, encode_utf8_strings,
+};
 use anyhow::{anyhow, Result};
 
 /// Represents the possible encoding of text in an ID3v2 tag.
@@ -42,12 +45,17 @@ impl TextEncoding {
     pub fn decode(&self, bytes: &[u8]) -> Result<Vec<String>> {
         Ok(match self {
             TextEncoding::Utf16Bom | TextEncoding::Utf16Be => decode_utf16_strings(bytes)?,
-            TextEncoding::Iso88591 | TextEncoding::Utf8 => bytes
-                .split(|&b| b == 0)
-                .filter(|b| !b.is_empty())
-                .map(|b| b.iter().map(|&c| c as char).collect())
-                .collect(),
+            TextEncoding::Iso88591 | TextEncoding::Utf8 => decode_utf8_strings(bytes),
         })
+    }
+
+    pub fn encode(&self, text: &[String]) -> Vec<u8> {
+        match self {
+            TextEncoding::Iso88591 => encode_iso88591_strings(text),
+            TextEncoding::Utf16Bom => encode_utf16bom_strings(text),
+            TextEncoding::Utf16Be => encode_utf16_strings(text),
+            TextEncoding::Utf8 => encode_utf8_strings(text),
+        }
     }
 
     /// Gets the index of the end of the next terminator for this encoding in the given bytes.
@@ -133,6 +141,16 @@ impl TextEncoding {
             TextEncoding::Utf16Be => 2,
             TextEncoding::Utf8 => 1,
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let byte = match &self {
+            TextEncoding::Iso88591 => 0u8,
+            TextEncoding::Utf16Bom => 1u8,
+            TextEncoding::Utf16Be => 2u8,
+            TextEncoding::Utf8 => 3u8,
+        };
+        vec![byte]
     }
 }
 

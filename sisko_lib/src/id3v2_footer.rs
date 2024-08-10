@@ -58,4 +58,22 @@ impl ID3v2Footer {
             size,
         })
     }
+
+    pub fn total_size() -> u32 {
+        10
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let id_bytes = self.file_identifier.as_bytes().to_vec();
+        let version_bytes = self.version.to_bytes();
+        let flag_bytes = self.flags.to_bytes();
+        let size_bytes = SynchSafeInteger::from(self.size).bytes;
+
+        let mut footer_bytes: Vec<u8> = vec![];
+        footer_bytes.extend(id_bytes);
+        footer_bytes.extend(version_bytes);
+        footer_bytes.extend(flag_bytes);
+        footer_bytes.extend(size_bytes);
+        footer_bytes
+    }
 }

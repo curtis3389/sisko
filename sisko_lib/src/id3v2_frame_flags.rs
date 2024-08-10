@@ -26,8 +26,8 @@ impl ID3v2FrameFlags {
     ///
     /// let flags = ID3v2FrameFlags::parse(&bytes);
     ///
-    /// assert_eq!(flags.status_messages.preserve_on_alter_tag, true);
-    /// assert_eq!(flags.status_messages.preserve_on_alter_file, true);
+    /// assert_eq!(flags.status_messages.preserve_on_alter_tag, false);
+    /// assert_eq!(flags.status_messages.preserve_on_alter_file, false);
     /// assert_eq!(flags.status_messages.is_read_only, false);
     ///
     /// assert_eq!(flags.format_description.is_in_group, true);
@@ -47,5 +47,15 @@ impl ID3v2FrameFlags {
             status_messages,
             format_description,
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let status_bytes = self.status_messages.to_bytes();
+        let format_bytes = self.format_description.to_bytes();
+
+        let mut flag_bytes: Vec<u8> = vec![];
+        flag_bytes.extend(status_bytes);
+        flag_bytes.extend(format_bytes);
+        flag_bytes
     }
 }

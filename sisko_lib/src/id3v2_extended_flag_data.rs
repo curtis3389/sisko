@@ -144,4 +144,28 @@ impl ID3v2ExtendedFlagData {
             ID3v2ExtendedFlagData::UnknownData { length, bytes: _ } => *length,
         }
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            ID3v2ExtendedFlagData::TagIsUpdateData { length } => vec![*length],
+            ID3v2ExtendedFlagData::CrcPresentData { length, crc } => {
+                let mut b: Vec<u8> = vec![*length];
+                b.extend(SynchSafeInteger::from_5byte(*crc).bytes);
+                b
+            }
+            ID3v2ExtendedFlagData::TagRestrictionsData {
+                length,
+                restrictions,
+            } => {
+                let mut b: Vec<u8> = vec![*length];
+                b.extend(restrictions.to_bytes());
+                b
+            }
+            ID3v2ExtendedFlagData::UnknownData { length, bytes } => {
+                let mut b: Vec<u8> = vec![*length];
+                b.extend(bytes);
+                b
+            }
+        }
+    }
 }

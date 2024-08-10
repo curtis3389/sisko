@@ -199,112 +199,203 @@ impl ID3v2FrameFields {
     /// ```
     pub fn parse(header: &ID3v2FrameHeader, bytes: &[u8]) -> Result<ID3v2FrameFields> {
         let frame_id = header.frame_id.as_str();
-        let fields: ID3v2FrameFields = if frame_id.starts_with('T') && frame_id != "TXXX" {
-            let encoding = TextEncoding::parse(bytes[0])?;
-            let text = encoding.decode(&bytes[1..])?;
-            ID3v2FrameFields::TextFields { encoding, text }
-        } else if frame_id.starts_with('W') && frame_id != "WXXX" {
-            ID3v2FrameFields::UrlFields {}
-        } else {
-            match frame_id {
-                "AENC" => ID3v2FrameFields::AudioEncryptionFields {},
-                "APIC" => {
-                    let encoding = TextEncoding::parse(bytes[0])?;
-                    let index =
-                        1 + TextEncoding::Iso88591
-                            .next_terminator(&bytes[1..])
-                            .ok_or(anyhow!(
+        let fields: ID3v2FrameFields =
+            if (frame_id.starts_with('T') && frame_id != "TXXX") || frame_id == "IPLS" {
+                let encoding = TextEncoding::parse(bytes[0])?;
+                let text = encoding.decode(&bytes[1..])?;
+                ID3v2FrameFields::TextFields { encoding, text }
+            } else if frame_id.starts_with('W') && frame_id != "WXXX" {
+                ID3v2FrameFields::UrlFields {}
+            } else {
+                match frame_id {
+                    "AENC" => ID3v2FrameFields::AudioEncryptionFields {},
+                    "APIC" => {
+                        let encoding = TextEncoding::parse(bytes[0])?;
+                        let index = 1 + TextEncoding::Iso88591.next_terminator(&bytes[1..]).ok_or(
+                            anyhow!(
                                 "Couldn't find an ISO-8859-1 string terminator in {} frame bytes!",
                                 frame_id
-                            ))?;
-                    let mime_type = TextEncoding::Iso88591.decode(&bytes[1..index])?.remove(0);
-                    let picture_type = PictureType::parse(bytes[index + 1])?;
-                    let next_index = index
-                        + 3
-                        + encoding
-                            .next_terminator(&bytes[index + 2..])
-                            .ok_or(anyhow!(
-                                "Couldn't find a string terminator for {} in {} frame bytes!",
-                                encoding,
-                                frame_id
-                            ))?
-                        + encoding.terminator_width();
-                    let description = encoding.decode(&bytes[index + 2..next_index])?.remove(0);
-                    let picture_data = bytes[next_index..].to_vec();
+                            ),
+                        )?;
+                        let mime_type = TextEncoding::Iso88591.decode(&bytes[1..index])?.remove(0);
+                        let picture_type = PictureType::parse(bytes[index + 1])?;
+                        let next_index = index
+                            + 3
+                            + encoding
+                                .next_terminator(&bytes[index + 2..])
+                                .ok_or(anyhow!(
+                                    "Couldn't find a string terminator for {} in {} frame bytes!",
+                                    encoding,
+                                    frame_id
+                                ))?
+                            + encoding.terminator_width();
+                        let description = encoding.decode(&bytes[index + 2..next_index])?.remove(0);
+                        let picture_data = bytes[next_index..].to_vec();
 
-                    ID3v2FrameFields::AttachedPictureFields {
-                        encoding,
-                        mime_type,
-                        picture_type,
-                        description,
-                        picture_data,
+                        ID3v2FrameFields::AttachedPictureFields {
+                            encoding,
+                            mime_type,
+                            picture_type,
+                            description,
+                            picture_data,
+                        }
                     }
-                }
-                "ASPI" => ID3v2FrameFields::AudioPointSeekIndexFields {},
-                "COMM" => {
-                    let encoding = TextEncoding::parse(bytes[0])?;
-                    let language = TextEncoding::Iso88591.decode(&bytes[1..4])?.remove(0);
-                    let mut text = encoding.decode(&bytes[4..])?;
-                    let description = text.remove(0);
+                    "ASPI" => ID3v2FrameFields::AudioPointSeekIndexFields {},
+                    "COMM" => {
+                        let encoding = TextEncoding::parse(bytes[0])?;
+                        let language = TextEncoding::Iso88591.decode(&bytes[1..4])?.remove(0);
+                        let mut text = encoding.decode(&bytes[4..])?;
+                        let description = text.remove(0);
 
-                    ID3v2FrameFields::CommentsFields {
-                        encoding,
-                        language,
-                        description,
-                        text,
+                        ID3v2FrameFields::CommentsFields {
+                            encoding,
+                            language,
+                            description,
+                            text,
+                        }
                     }
-                }
-                "COMR" => ID3v2FrameFields::CommercialFields {},
-                "ENCR" => ID3v2FrameFields::EncryptionFields {},
-                "EQU2" => ID3v2FrameFields::EqualisationFields {},
-                "ETCO" => ID3v2FrameFields::EventTimingCodesFields {},
-                "GEOB" => ID3v2FrameFields::GeneralObjectFields {},
-                "GRID" => ID3v2FrameFields::GroupRegistrationFields {},
-                "LINK" => ID3v2FrameFields::LinkedInfoFields {},
-                "MCDI" => ID3v2FrameFields::MusicCdIdentifierFields {},
-                "MLLT" => ID3v2FrameFields::MpegLocationLookupFields {},
-                "OWNE" => ID3v2FrameFields::OwnershipFields {},
-                "PCNT" => ID3v2FrameFields::PlayCounterFields {},
-                "POPM" => ID3v2FrameFields::PopularimeterFields {},
-                "POSS" => ID3v2FrameFields::PositionSyncFields {},
-                "PRIV" => ID3v2FrameFields::PrivateFields {},
-                "RBUF" => ID3v2FrameFields::RecommendedBufferFields {},
-                "RVA2" => ID3v2FrameFields::RelativeVolumeAdjustmentFields {},
-                "RVRB" => ID3v2FrameFields::ReverbFields {},
-                "SEEK" => ID3v2FrameFields::SeekFields {},
-                "SIGN" => ID3v2FrameFields::SignatureFields {},
-                "SYLT" => ID3v2FrameFields::SynchronisedLyricsFields {},
-                "SYTC" => ID3v2FrameFields::SynchronisedTempCodesFields {},
-                "TXXX" => {
-                    let encoding = TextEncoding::parse(bytes[0])?;
-                    let mut value = encoding.decode(&bytes[1..])?;
-                    let description = value.remove(0);
-                    ID3v2FrameFields::UserDefinedTextFields {
-                        encoding,
-                        description,
-                        value,
+                    "COMR" => ID3v2FrameFields::CommercialFields {},
+                    "ENCR" => ID3v2FrameFields::EncryptionFields {},
+                    "EQU2" => ID3v2FrameFields::EqualisationFields {},
+                    "ETCO" => ID3v2FrameFields::EventTimingCodesFields {},
+                    "GEOB" => ID3v2FrameFields::GeneralObjectFields {},
+                    "GRID" => ID3v2FrameFields::GroupRegistrationFields {},
+                    "LINK" => ID3v2FrameFields::LinkedInfoFields {},
+                    "MCDI" => ID3v2FrameFields::MusicCdIdentifierFields {},
+                    "MLLT" => ID3v2FrameFields::MpegLocationLookupFields {},
+                    "OWNE" => ID3v2FrameFields::OwnershipFields {},
+                    "PCNT" => ID3v2FrameFields::PlayCounterFields {},
+                    "POPM" => ID3v2FrameFields::PopularimeterFields {},
+                    "POSS" => ID3v2FrameFields::PositionSyncFields {},
+                    "PRIV" => ID3v2FrameFields::PrivateFields {},
+                    "RBUF" => ID3v2FrameFields::RecommendedBufferFields {},
+                    "RVA2" => ID3v2FrameFields::RelativeVolumeAdjustmentFields {},
+                    "RVRB" => ID3v2FrameFields::ReverbFields {},
+                    "SEEK" => ID3v2FrameFields::SeekFields {},
+                    "SIGN" => ID3v2FrameFields::SignatureFields {},
+                    "SYLT" => ID3v2FrameFields::SynchronisedLyricsFields {},
+                    "SYTC" => ID3v2FrameFields::SynchronisedTempCodesFields {},
+                    "TXXX" => {
+                        let encoding = TextEncoding::parse(bytes[0])?;
+                        let mut value = encoding.decode(&bytes[1..])?;
+                        let description = value.remove(0);
+                        ID3v2FrameFields::UserDefinedTextFields {
+                            encoding,
+                            description,
+                            value,
+                        }
                     }
-                }
-                "UFID" => {
-                    let (index, _) = bytes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_index, &byte)| byte == 0)
-                        .take(1)
-                        .collect::<Vec<(usize, &u8)>>()[0];
-                    ID3v2FrameFields::UniqueFileIdentifierFields {
-                        owner_id: TextEncoding::Iso88591.decode(&bytes[..index])?.remove(0),
-                        id: bytes[(index + 1)..].to_vec(),
+                    "UFID" => {
+                        let (index, _) = bytes
+                            .iter()
+                            .enumerate()
+                            .filter(|(_index, &byte)| byte == 0)
+                            .take(1)
+                            .collect::<Vec<(usize, &u8)>>()[0];
+                        ID3v2FrameFields::UniqueFileIdentifierFields {
+                            owner_id: TextEncoding::Iso88591.decode(&bytes[..index])?.remove(0),
+                            id: bytes[(index + 1)..].to_vec(),
+                        }
                     }
+                    "USER" => ID3v2FrameFields::TermsOfUseFields {},
+                    "USLT" => ID3v2FrameFields::UnsynchronisedLyricsFields {},
+                    "WXXX" => ID3v2FrameFields::UserDefinedUrlFields {},
+                    _ => ID3v2FrameFields::UnknownFrameFields {
+                        bytes: bytes.to_vec(),
+                    },
                 }
-                "USER" => ID3v2FrameFields::TermsOfUseFields {},
-                "USLT" => ID3v2FrameFields::UnsynchronisedLyricsFields {},
-                "WXXX" => ID3v2FrameFields::UserDefinedUrlFields {},
-                _ => ID3v2FrameFields::UnknownFrameFields {
-                    bytes: bytes.to_vec(),
-                },
-            }
-        };
+            };
         Ok(fields)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match &self {
+            ID3v2FrameFields::AttachedPictureFields {
+                encoding: _,
+                mime_type: _,
+                picture_type: _,
+                description: _,
+                picture_data: _,
+            } => todo!(),
+            ID3v2FrameFields::AudioEncryptionFields {} => todo!(),
+            ID3v2FrameFields::AudioPointSeekIndexFields {} => todo!(),
+            ID3v2FrameFields::CommentsFields {
+                encoding,
+                language,
+                description,
+                text,
+            } => {
+                let encoding_bytes = encoding.to_bytes();
+                let lang_bytes = language.clone().into_bytes();
+                let desc_bytes = encoding.encode(&[description.clone()]);
+                let text_bytes = encoding.encode(text);
+
+                let mut field_bytes: Vec<u8> = vec![];
+                field_bytes.extend(encoding_bytes);
+                field_bytes.extend(lang_bytes);
+                field_bytes.extend(desc_bytes);
+                field_bytes.extend(text_bytes);
+                field_bytes
+            }
+            ID3v2FrameFields::CommercialFields {} => todo!(),
+            ID3v2FrameFields::EncryptionFields {} => todo!(),
+            ID3v2FrameFields::EqualisationFields {} => todo!(),
+            ID3v2FrameFields::EventTimingCodesFields {} => todo!(),
+            ID3v2FrameFields::GeneralObjectFields {} => todo!(),
+            ID3v2FrameFields::GroupRegistrationFields {} => todo!(),
+            ID3v2FrameFields::LinkedInfoFields {} => todo!(),
+            ID3v2FrameFields::MpegLocationLookupFields {} => todo!(),
+            ID3v2FrameFields::MusicCdIdentifierFields {} => todo!(),
+            ID3v2FrameFields::OwnershipFields {} => todo!(),
+            ID3v2FrameFields::PlayCounterFields {} => todo!(),
+            ID3v2FrameFields::PopularimeterFields {} => todo!(),
+            ID3v2FrameFields::PositionSyncFields {} => todo!(),
+            ID3v2FrameFields::PrivateFields {} => todo!(),
+            ID3v2FrameFields::RecommendedBufferFields {} => todo!(),
+            ID3v2FrameFields::RelativeVolumeAdjustmentFields {} => todo!(),
+            ID3v2FrameFields::ReverbFields {} => todo!(),
+            ID3v2FrameFields::SeekFields {} => todo!(),
+            ID3v2FrameFields::SignatureFields {} => todo!(),
+            ID3v2FrameFields::SynchronisedLyricsFields {} => todo!(),
+            ID3v2FrameFields::SynchronisedTempCodesFields {} => todo!(),
+            ID3v2FrameFields::TermsOfUseFields {} => todo!(),
+            ID3v2FrameFields::TextFields { encoding, text } => {
+                let encoding_bytes = encoding.to_bytes();
+                let text_bytes = encoding.encode(text);
+
+                let mut field_bytes: Vec<u8> = vec![];
+                field_bytes.extend(encoding_bytes);
+                field_bytes.extend(text_bytes);
+                field_bytes
+            }
+            ID3v2FrameFields::UniqueFileIdentifierFields { owner_id, id } => {
+                let owner_bytes = TextEncoding::Iso88591.encode(&[owner_id.clone()]);
+                let id_bytes = id.clone();
+
+                let mut field_bytes: Vec<u8> = vec![];
+                field_bytes.extend(owner_bytes);
+                field_bytes.extend(id_bytes);
+                field_bytes
+            }
+            ID3v2FrameFields::UnknownFrameFields { bytes } => bytes.clone(),
+            ID3v2FrameFields::UnsynchronisedLyricsFields {} => todo!(),
+            ID3v2FrameFields::UrlFields {} => todo!(),
+            ID3v2FrameFields::UserDefinedTextFields {
+                encoding,
+                description,
+                value,
+            } => {
+                let encoding_bytes = encoding.to_bytes();
+                let desc_bytes = encoding.encode(&[description.clone()]);
+                let text_bytes = encoding.encode(value);
+
+                let mut field_bytes: Vec<u8> = vec![];
+                field_bytes.extend(encoding_bytes);
+                field_bytes.extend(desc_bytes);
+                field_bytes.extend(text_bytes);
+                field_bytes
+            }
+            ID3v2FrameFields::UserDefinedUrlFields {} => todo!(),
+        }
     }
 }

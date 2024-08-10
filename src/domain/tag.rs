@@ -1,4 +1,7 @@
-use sisko_lib::id3v2_tag::ID3v2Tag;
+use sisko_lib::{
+    id3v2_header::ID3v2Header, id3v2_header_flags::ID3v2HeaderFlags, id3v2_tag::ID3v2Tag,
+    id3v2_version_number::ID3v2VersionNumber,
+};
 
 use crate::domain::{TagField, TagFieldType, TagType};
 
@@ -81,5 +84,31 @@ impl Tag {
 impl From<&ID3v2Tag> for Tag {
     fn from(id3v2: &ID3v2Tag) -> Self {
         Tag::new(TagType::ID3v2, TagField::parse_all(&id3v2.frames))
+    }
+}
+
+impl From<&Tag> for ID3v2Tag {
+    fn from(value: &Tag) -> Self {
+        let frames = TagField::convert(&value.fields);
+        let header = ID3v2Header {
+            file_identifier: String::from("ID3"),
+            version: ID3v2VersionNumber::new(4, 0),
+            flags: ID3v2HeaderFlags {
+                unsynchronisation: false,
+                has_extended_header: false,
+                is_experimental: false,
+                has_footer: false,
+            },
+            size: frames.iter().map(|frame| frame.header.size).sum(),
+        };
+        ID3v2Tag {
+            header,
+            // TODO: save extended header with restriction settings
+            extended_header: None,
+            frames,
+            // padding and footer determined when saving
+            padding: 0,
+            footer: None,
+        }
     }
 }

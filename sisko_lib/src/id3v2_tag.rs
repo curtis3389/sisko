@@ -4,7 +4,7 @@ use crate::id3v2_frame::ID3v2Frame;
 use crate::id3v2_header::ID3v2Header;
 use anyhow::Result;
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::{prelude::*, SeekFrom};
 use std::io::{BufReader, Read};
 use std::path::Path;
 
@@ -128,5 +128,112 @@ impl ID3v2Tag {
         };
 
         ID3v2Tag::parse(header, &middle_bytes[..], footer)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let header_bytes: Vec<u8> = self.header.to_bytes();
+        let extended_header_bytes: Vec<u8> = match &self.extended_header {
+            Some(extended_header) => extended_header.to_bytes(),
+            None => vec![],
+        };
+        let frame_bytes: Vec<u8> = self
+            .frames
+            .iter()
+            .flat_map(|frame| frame.to_bytes())
+            .collect();
+        let padding_bytes: Vec<u8> = vec![0u8; self.padding as usize];
+        let footer_bytes: Vec<u8> = match &self.footer {
+            Some(footer) => footer.to_bytes(),
+            None => vec![],
+        };
+
+        let mut tag_bytes: Vec<u8> = vec![];
+        tag_bytes.extend(header_bytes);
+        tag_bytes.extend(extended_header_bytes);
+        tag_bytes.extend(frame_bytes);
+        tag_bytes.extend(padding_bytes);
+        tag_bytes.extend(footer_bytes);
+        tag_bytes
+    }
+
+    pub fn total_size(&self) -> u32 {
+        let header_size = ID3v2Header::total_size();
+        let body_size = self.header.size; // extended + frames + padding
+        let footer_size = match self.header.flags.has_footer {
+            true => ID3v2Footer::total_size(),
+            false => 0,
+        };
+        header_size + body_size + footer_size
+    }
+
+    // TODO: remove this method
+    pub fn write_to_path<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        // NOTE: new tag size is without padding; padding depends on whether file has header and its size
+        // TODO: replace this with ID3v2Tag::has_tag(path)
+        let mut file = File::open(path.as_ref())?;
+        let file_size = file.seek(SeekFrom::End(0))? as u32;
+        file.seek(SeekFrom::Start(0))?;
+        match ID3v2Tag::read_from_path(path).ok() {
+            Some(tag) => {
+                let min_new_tag_size = self.calc_min_size();
+                let min_new_size = file_size + min_new_tag_size;
+                let padding = (((min_new_size / 2000) + 1) * 2000) - min_new_size;
+                self.padding = padding;
+
+                file.seek(SeekFrom::Start(tag.total_size().into()))?;
+                let mut file_content: Vec<u8> = vec![];
+                file.read_to_end(&mut file_content)?;
+
+                let tag_bytes = self.to_bytes();
+                let mut file = File::create_new("tmp.mp3")?;
+                file.write_all(&tag_bytes)?;
+                file.write_all(file_content.as_slice())?;
+
+                /*if min_new_tag_size <= old_tag_size {
+                    // set padding so total size equals old tag
+                    // overwrite old tag with new tag
+                } else {
+                    // then rewrite file with old tag replaced with new
+                    // set padding so that size is bigger
+                    // read data after tag into memory
+                    // write tag and then data to file
+                }*/
+            }
+            None => {
+                let padding = 2000;
+                self.padding = padding;
+
+                // read file into memory
+                let mut reader = BufReader::new(file);
+                let mut file_content: Vec<u8> = vec![];
+                reader.read_to_end(&mut file_content)?;
+
+                // write tag and then memory to file
+                let tag_bytes = self.to_bytes();
+                let mut file = File::create_new("tmp.mp3")?;
+                file.write_all(&tag_bytes)?;
+                file.write_all(file_content.as_slice())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn calc_frame_size(&self) -> u32 {
+        self.frames.iter().map(|frame| frame.header.size).sum()
+    }
+
+    fn calc_min_size(&self) -> u32 {
+        let header_size = ID3v2Header::total_size();
+        let extended_header_size = match &self.extended_header {
+            Some(extended_header) => extended_header.size,
+            None => 0,
+        };
+        let frame_size = self.calc_frame_size();
+        let footer_size = ID3v2Footer::total_size();
+        header_size + extended_header_size + frame_size + footer_size
+    }
+
+    fn calc_padding_to_total(&self, total: u32) -> u32 {
+        total - self.calc_min_size()
     }
 }

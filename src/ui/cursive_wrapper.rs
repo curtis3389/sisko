@@ -158,6 +158,14 @@ impl CursiveWrapper {
                     error!("Error sending select album view event: {e}!");
                 }
             })
+            .on_submit(|s: &mut Cursive, _row: usize, index: usize| {
+                if let Err(e) = (|| {
+                    let submitted_album_view = s.clone_album_view(index)?;
+                    UiEventService::instance().send(UiEvent::SubmitAlbumView(submitted_album_view))
+                })() {
+                    error!("Error sending submit album view event: {e}!");
+                }
+            })
             .with_name(ALBUM_FILE_TABLE);
 
         let metadata_table = TableView::<TagFieldView, TagFieldColumn>::new()

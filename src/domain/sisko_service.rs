@@ -3,6 +3,10 @@ use crate::domain::{AlbumService, AudioFile, File, FileService};
 use crate::ui::UiWrapper;
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
+use sisko_lib::id3v2_tag::ID3v2Tag;
+use std::fs::File as FsFile;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Represents a service for application actions.
@@ -48,6 +52,32 @@ impl SiskoService {
             .join("");
         UiWrapper::instance().open_logs(&logs)?;
         Ok(())
+    }
+
+    pub fn save_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
+        let audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
+        let audio_bytes = Self::get_audio_bytes(&audio_file.file.absolute_path)?;
+        let filename = &audio_file.file.name;
+        let tag = audio_file.tags.first().ok_or_else(|| anyhow!(""))?;
+        let tag = ID3v2Tag::from(tag);
+        let mut bytes = tag.to_bytes();
+        bytes.extend(audio_bytes);
+        let mut file = FsFile::create(filename)?;
+        file.write_all(&bytes)?;
+        Ok(())
+    }
+
+    fn get_audio_bytes(path: &PathBuf) -> Result<Vec<u8>> {
+        let offset = match ID3v2Tag::read_from_path(path).ok() {
+            Some(tag) => tag.total_size(),
+            None => 0,
+        };
+
+        let mut file = FsFile::open(path)?;
+        file.seek(SeekFrom::Start(offset.into()))?;
+        let mut file_content: Vec<u8> = vec![];
+        file.read_to_end(&mut file_content)?;
+        Ok(file_content)
     }
 
     pub fn select_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {

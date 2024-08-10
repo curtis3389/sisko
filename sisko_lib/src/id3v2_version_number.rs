@@ -33,4 +33,8 @@ impl ID3v2VersionNumber {
             revision_number,
         }
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        vec![self.major_number, self.revision_number]
+    }
 }

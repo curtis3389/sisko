@@ -1,4 +1,4 @@
-use crate::is_bit_set;
+use crate::{is_bit_set, set_bit};
 
 /// Represents the flags in an ID3v2 header.
 #[derive(Clone, Debug)]
@@ -48,5 +48,22 @@ impl ID3v2HeaderFlags {
             is_experimental,
             has_footer,
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut byte = 0u8;
+        if self.unsynchronisation {
+            set_bit(&mut byte, 7);
+        }
+        if self.has_extended_header {
+            set_bit(&mut byte, 6);
+        }
+        if self.is_experimental {
+            set_bit(&mut byte, 5);
+        }
+        if self.has_footer {
+            set_bit(&mut byte, 4);
+        }
+        vec![byte]
     }
 }

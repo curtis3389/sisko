@@ -10,9 +10,11 @@ pub enum UiEvent {
     OpenAddFile,
     OpenAddFolder,
     OpenLogs,
+    SaveAudioFile(Arc<Mutex<AudioFile>>),
     ScanAudioFile(Arc<Mutex<AudioFile>>),
     SelectAlbumView(AlbumView),
     SelectClusterFile(AudioFileView),
+    SubmitAlbumView(AlbumView),
     SubmitClusterFile(AudioFileView),
     SubmitMetadataRow(TagFieldView),
 }

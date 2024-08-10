@@ -1,4 +1,4 @@
-use crate::is_bit_set;
+use crate::{is_bit_set, set_bit};
 
 /// Represents the format description flags for a frame in and ID3v2 tag.
 #[derive(Clone, Debug)]
@@ -49,5 +49,25 @@ impl ID3v2FrameFormatDescription {
             is_unsynchronised: is_bit_set(byte, 1),
             has_data_length_indicator: is_bit_set(byte, 0),
         }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut byte = 0u8;
+        if self.is_in_group {
+            set_bit(&mut byte, 6);
+        }
+        if self.is_compressed {
+            set_bit(&mut byte, 3);
+        }
+        if self.is_encrypted {
+            set_bit(&mut byte, 2);
+        }
+        if self.is_unsynchronised {
+            set_bit(&mut byte, 1);
+        }
+        if self.has_data_length_indicator {
+            set_bit(&mut byte, 0);
+        }
+        vec![byte]
     }
 }

@@ -98,4 +98,14 @@ impl ID3v2Frame {
         }
         Ok(frames)
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let header_bytes = self.header.to_bytes();
+        let field_bytes = self.fields.to_bytes();
+
+        let mut frame_bytes: Vec<u8> = vec![];
+        frame_bytes.extend(header_bytes);
+        frame_bytes.extend(field_bytes);
+        frame_bytes
+    }
 }

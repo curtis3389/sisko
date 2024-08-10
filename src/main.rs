@@ -127,6 +127,9 @@ pub async fn run_gui() -> Result<()> {
             UiEvent::FolderSelected(folder) => SiskoService::instance().add_folder(folder.clone()),
             UiEvent::OpenAddFile => UiWrapper::instance().open_file_dialog(),
             UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
+            UiEvent::SaveAudioFile(audio_file) => {
+                SiskoService::instance().save_audio_file(audio_file)
+            }
             UiEvent::ScanAudioFile(audio_file) => {
                 let audio_file = audio_file.clone();
                 tokio::spawn(async move {
@@ -156,6 +159,9 @@ pub async fn run_gui() -> Result<()> {
                 }),
             UiEvent::SelectClusterFile(audio_file_view) => {
                 SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
+            }
+            UiEvent::SubmitAlbumView(album_view) => {
+                UiWrapper::instance().open_album_view_dialog(album_view)
             }
             UiEvent::SubmitClusterFile(audio_file_view) => {
                 UiWrapper::instance().open_audio_file_dialog(audio_file_view)

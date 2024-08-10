@@ -122,6 +122,17 @@ impl UiWrapper {
             .map_err(|_| anyhow!("Error sending open logs callback to CbSink!"))
     }
 
+    pub fn open_album_view_dialog(&self, view: &AlbumView) -> Result<()> {
+        let view = view.clone();
+        CbSinkService::instance()?
+            .send(Box::new(move |s: &mut Cursive| {
+                if let Err(e) = album_view_dialog(s, &view) {
+                    error!("Error opening album view dialog: {e}!");
+                }
+            }))
+            .map_err(|_| anyhow!("Error sending open album view dialog callback to CbSink!"))
+    }
+
     pub fn open_tag_field_dialog(&self, field: &TagFieldView) -> Result<()> {
         let field = field.clone();
         CbSinkService::instance()?
@@ -311,6 +322,36 @@ where
         });
 
     s.add_layer(dialog);
+}
+
+fn album_view_dialog(s: &mut Cursive, view: &AlbumView) -> Result<()> {
+    let audio_file = {
+        let album = view.album.lock().map_err(|_| anyhow!(""))?;
+        match &view.track_id {
+            Some(track_id) => album
+                .track(track_id.as_str())
+                .map(|track| track.matched_files[0].clone())
+                .ok(),
+            None => None,
+        }
+    };
+    let title = view.title().unwrap_or_default();
+    let save = Button::new("Save", move |_| {
+        if let Some(audio_file) = &audio_file {
+            if let Err(e) =
+                UiEventService::instance().send(UiEvent::SaveAudioFile(audio_file.clone()))
+            {
+                error!("Error sending scan audio file event: {e}!");
+            }
+        }
+    });
+    let cancel = Button::new("Cancel", |s| {
+        s.pop_layer();
+    });
+    let layout = LinearLayout::vertical().child(save).child(cancel);
+    let dialog = Dialog::around(layout).title(title);
+    s.add_layer(dialog);
+    Ok(())
 }
 
 /// Opens a tag field edit dialog for the given tag field view.
