@@ -9,19 +9,27 @@ use std::sync::{Arc, Mutex};
 /// Represents the UI view of a file that contains audio data..
 #[derive(Clone, Debug)]
 pub struct AudioFileView {
-    /// The title of the audio.
-    pub title: String,
-
-    /// The artist of the audio.
-    pub artist: String,
-
-    /// The length of the audio.
-    pub length: String,
-
     /// The audio file.
     pub audio_file: Arc<Mutex<AudioFile>>,
 
     pub path: PathBuf,
+}
+
+impl AudioFileView {
+    pub fn artist(&self) -> String {
+        let audio_file = self.audio_file.lock().unwrap();
+        audio_file.artist().unwrap_or("<no artist>".to_string())
+    }
+
+    pub fn length(&self) -> String {
+        let audio_file = self.audio_file.lock().unwrap();
+        audio_file.length().unwrap_or("?:??".to_string())
+    }
+
+    pub fn title(&self) -> String {
+        let audio_file = self.audio_file.lock().unwrap();
+        audio_file.title().unwrap_or("<no title>".to_string())
+    }
 }
 
 impl TryFrom<&Arc<Mutex<AudioFile>>> for AudioFileView {
@@ -29,13 +37,8 @@ impl TryFrom<&Arc<Mutex<AudioFile>>> for AudioFileView {
 
     fn try_from(audio_file: &Arc<Mutex<AudioFile>>) -> Result<Self> {
         let mutex = audio_file.clone();
-        let audio_file = audio_file
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock audio file mutex!"))?;
+        let audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
         Ok(Self {
-            title: audio_file.title().unwrap_or("<no title>".to_string()),
-            artist: audio_file.artist().unwrap_or("<no artist>".to_string()),
-            length: audio_file.length().unwrap_or("?:??".to_string()),
             audio_file: mutex,
             path: audio_file.file.absolute_path.clone(),
         })
@@ -50,9 +53,9 @@ impl TableViewItem<AudioFileColumn> for AudioFileView {
     /// * `column` - The column to get the value of.
     fn to_column(&self, column: AudioFileColumn) -> String {
         match column {
-            AudioFileColumn::Title => self.title.to_string(),
-            AudioFileColumn::Artist => self.artist.to_string(),
-            AudioFileColumn::Length => self.length.to_string(),
+            AudioFileColumn::Title => self.title(),
+            AudioFileColumn::Artist => self.artist(),
+            AudioFileColumn::Length => self.length(),
         }
     }
 
@@ -67,9 +70,9 @@ impl TableViewItem<AudioFileColumn> for AudioFileView {
         Self: Sized,
     {
         match column {
-            AudioFileColumn::Title => self.title.cmp(&other.title),
-            AudioFileColumn::Artist => self.artist.cmp(&other.artist),
-            AudioFileColumn::Length => self.length.cmp(&other.length),
+            AudioFileColumn::Title => self.title().cmp(&other.title()),
+            AudioFileColumn::Artist => self.artist().cmp(&other.artist()),
+            AudioFileColumn::Length => self.length().cmp(&other.length()),
         }
     }
 }

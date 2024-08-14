@@ -1,5 +1,6 @@
 use super::{AudioFileService, LogHistory};
 use crate::domain::{AlbumService, AudioFile, File, FileService};
+use crate::infrastructure::acoustid::AcoustIdService;
 use crate::ui::UiWrapper;
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
@@ -38,6 +39,17 @@ impl SiskoService {
         for t in audio_files {
             UiWrapper::instance().add_cluster_file(t)?;
         }
+        Ok(())
+    }
+
+    pub fn calculate_fingerprint(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
+        let path = {
+            let audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
+            audio_file.file.absolute_path.clone()
+        };
+        let fingerprint = AcoustIdService::instance().get_fingerprint(&path).ok();
+        let mut audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
+        audio_file.fingerprint = fingerprint.or(audio_file.fingerprint.clone());
         Ok(())
     }
 

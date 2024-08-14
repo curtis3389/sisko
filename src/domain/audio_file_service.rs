@@ -1,8 +1,11 @@
 use crate::domain::{AudioFile, File, TagService};
 use anyhow::{anyhow, Result};
+use log::error;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
+
+use super::SiskoService;
 
 /// Represents a service for working with audio files.
 /// An audio file is a file that contains audio data that sisko recognizes.
@@ -47,8 +50,14 @@ impl AudioFileService {
 
     fn load(&self, file: &File) -> Result<()> {
         let tags = TagService::instance().get_all(file);
-        let audio_file = AudioFile::new(file.clone(), tags);
+        let audio_file = AudioFile::new(file.clone(), None, tags);
         let audio_file = Arc::new(Mutex::new(audio_file));
+        let copy = audio_file.clone();
+        tokio::spawn(async move {
+            if let Err(e) = SiskoService::instance().calculate_fingerprint(&copy) {
+                error!("{}", e);
+            }
+        });
         self.audio_files
             .lock()
             .map_err(|_| anyhow!("Failed to lock audio files mutex!"))?

@@ -1,4 +1,7 @@
-use crate::domain::{File, Tag, TagField, TagType};
+use crate::{
+    domain::{File, Tag, TagField, TagType},
+    infrastructure::acoustid::Fingerprint,
+};
 use anyhow::{anyhow, Result};
 
 /// Represents a file that contains audio data recognized by sisko.
@@ -8,6 +11,8 @@ pub struct AudioFile {
 
     /// The file that contains audio data.
     pub file: File,
+
+    pub fingerprint: Option<Fingerprint>,
 
     pub recording_id: Option<String>,
 
@@ -22,10 +27,11 @@ impl AudioFile {
     ///
     /// * `file` - The file that contains audio data.
     /// * `tags` - The metadata tags from the file.
-    pub fn new(file: File, tags: Vec<Tag>) -> Self {
+    pub fn new(file: File, fingerprint: Option<Fingerprint>, tags: Vec<Tag>) -> Self {
         Self {
             acoust_id: None,
             file,
+            fingerprint,
             recording_id: None,
             tags,
         }
@@ -38,7 +44,10 @@ impl AudioFile {
 
     /// Returns the length of the audio, if any.
     pub fn length(&self) -> Option<String> {
-        None
+        match &self.fingerprint {
+            None => None,
+            Some(f) => f.duration.parse::<u64>().ok().map(to_length_string),
+        }
     }
 
     /// Returns the title of the title, if any.
@@ -66,4 +75,19 @@ impl AudioFile {
         tag.update_field(tag_field);
         Ok(())
     }
+}
+
+const SECONDS_IN_HOUR: u64 = 3600;
+const SECONDS_IN_MINUTE: u64 = 60;
+
+fn to_length_string(seconds: u64) -> String {
+    let hours = seconds / SECONDS_IN_HOUR;
+    let hour_part = match hours == 0 {
+        true => String::new(),
+        false => format!("{}:", hours),
+    };
+    let seconds = seconds % SECONDS_IN_HOUR;
+    let minutes = seconds / SECONDS_IN_MINUTE;
+    let seconds = seconds % SECONDS_IN_MINUTE;
+    format!("{}{}:{}", hour_part, minutes, seconds)
 }

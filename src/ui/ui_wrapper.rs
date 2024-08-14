@@ -460,7 +460,7 @@ fn audio_file_dialog(s: &mut Cursive, view: &AudioFileView) {
         .child(save)
         .child(remove);
     let dialog = Dialog::around(layout)
-        .title(view.title.clone())
+        .title(view.title().clone())
         //.button("Save", move |s: &mut Cursive| {...})
         .button("Cancel", |s| {
             s.pop_layer();
