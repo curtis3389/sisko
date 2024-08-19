@@ -26,6 +26,14 @@ pub struct Album {
 }
 
 impl Album {
+    pub fn is_all_matched(&self) -> bool {
+        self.tracks.iter().all(|track| track.has_match())
+    }
+
+    pub fn has_changes(&self) -> bool {
+        self.tracks.iter().any(|track| track.has_changes())
+    }
+
     pub fn match_file(&mut self, audio_file: &Am<AudioFile>) -> Result<()> {
         let recording_id = audio_file
             .lock()

@@ -97,22 +97,21 @@ impl AlbumView {
             .map_err(|_| anyhow!("Error locking album mutex!"))?;
         match &self.track_id {
             None => {
-                let all_matched = album
-                    .tracks
-                    .iter()
-                    .all(|track| !track.matched_files.is_empty());
-                let icon = match all_matched {
-                    true => "⦿", // TODO: use change list to add asterisk above: ⦿⃰ and ⦾⃰
-                    false => "⦾",
+                let icon = match (album.is_all_matched(), album.has_changes()) {
+                    (true, false) => "⦿",
+                    (false, false) => "⦾",
+                    (true, true) => "⦿⃰",
+                    (false, true) => "⦾⃰",
                 };
                 Ok(format!("{} {}", icon, album.title.clone()))
             }
             Some(track_id) => {
                 let track = album.track(track_id)?;
-                let has_match = !track.matched_files.is_empty();
-                let icon = match has_match {
-                    true => "█", // TODO: use match rating to use other block characters: ▁, ▂, ▃, ▄, ▅, ▆, ▇
-                    false => " ", // TODO: show matched and no changes with ✓ or ✔
+                let icon = match (track.has_match(), track.has_changes()) {
+                    (true, false) => "✔",
+                    (false, false) => " ",
+                    (true, true) => "█", // TODO: use match rating to use other block characters: ▁, ▂, ▃, ▄, ▅, ▆, ▇
+                    (false, true) => " ",
                 };
                 Ok(format!(
                     "  {} {}-{} {}",

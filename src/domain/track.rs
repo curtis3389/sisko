@@ -51,4 +51,25 @@ impl Track {
             total_tracks: media.track_count,
         }
     }
+
+    pub fn has_changes(&self) -> bool {
+        self.matched_files.iter().any(|file| {
+            let file = file.lock().unwrap();
+            file.tags.iter().any(|tag| {
+                tag.fields.iter().any(|field| match field {
+                    super::TagField::Binary(_, old, new) => {
+                        new.as_ref().map(|v| !v.eq(old)).unwrap_or(false)
+                    }
+                    super::TagField::Text(_, old, new) => {
+                        new.as_ref().map(|v| !v.eq(old)).unwrap_or(false)
+                    }
+                    super::TagField::Unknown(_, _) => false,
+                })
+            })
+        })
+    }
+
+    pub fn has_match(&self) -> bool {
+        !self.matched_files.is_empty()
+    }
 }
