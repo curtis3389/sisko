@@ -1,5 +1,5 @@
 use super::AudioFile;
-use crate::infrastructure::{musicbrainz, Am};
+use crate::infrastructure::musicbrainz;
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
@@ -11,7 +11,7 @@ pub struct Track {
     pub id: String,
     pub isrc: Option<String>,
     pub length: Duration,
-    pub matched_files: Vec<Am<AudioFile>>,
+    pub matched_files: Vec<AudioFile>,
     pub media: String,
     pub number: i32,
     pub original_release_date: String,
@@ -54,7 +54,6 @@ impl Track {
 
     pub fn has_changes(&self) -> bool {
         self.matched_files.iter().any(|file| {
-            let file = file.lock().unwrap();
             file.tags.iter().any(|tag| {
                 tag.fields.iter().any(|field| match field {
                     super::TagField::Binary(_, old, new) => {

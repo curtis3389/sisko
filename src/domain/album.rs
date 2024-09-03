@@ -1,5 +1,5 @@
 use super::{AudioFile, TagFieldType, Track};
-use crate::infrastructure::{musicbrainz::Release, Am};
+use crate::infrastructure::musicbrainz::Release;
 use anyhow::{anyhow, Result};
 use std::time::Duration;
 
@@ -34,10 +34,8 @@ impl Album {
         self.tracks.iter().any(|track| track.has_changes())
     }
 
-    pub fn match_file(&mut self, audio_file: &Am<AudioFile>) -> Result<()> {
+    pub fn match_file(&mut self, audio_file: &AudioFile) -> Result<()> {
         let recording_id = audio_file
-            .lock()
-            .map_err(|_| anyhow!("Error locking audio file mutex!"))?
             .recording_id
             .as_ref()
             .ok_or_else(|| anyhow!("Error! Can't match an audio file missing a recording ID!"))?
@@ -67,10 +65,7 @@ impl Album {
         })
     }
 
-    pub fn update_tag_fields(&self, audio_file: &Am<AudioFile>) -> Result<()> {
-        let mut audio_file = audio_file
-            .lock()
-            .map_err(|_| anyhow!("Error locking the audio file mutex!"))?;
+    pub fn update_tag_fields(&self, audio_file: &mut AudioFile) -> Result<()> {
         let acoust_id = audio_file.acoust_id.clone();
         let recording_id = audio_file
             .recording_id

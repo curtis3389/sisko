@@ -1,13 +1,13 @@
-use crate::{
-    domain::{File, Tag, TagField, TagType},
-    infrastructure::acoustid::Fingerprint,
-};
+use super::{DomainEvent, File, Tag, TagField, TagService, TagType};
+use crate::infrastructure::acoustid::Fingerprint;
 use anyhow::{anyhow, Result};
 
 /// Represents a file that contains audio data recognized by sisko.
 #[derive(Clone, Debug)]
 pub struct AudioFile {
     pub acoust_id: Option<String>,
+
+    pub events: Vec<DomainEvent>,
 
     /// The file that contains audio data.
     pub file: File,
@@ -30,6 +30,7 @@ impl AudioFile {
     pub fn new(file: File, fingerprint: Option<Fingerprint>, tags: Vec<Tag>) -> Self {
         Self {
             acoust_id: None,
+            events: vec![],
             file,
             fingerprint,
             recording_id: None,
@@ -74,6 +75,13 @@ impl AudioFile {
             })?;
         tag.update_field(tag_field);
         Ok(())
+    }
+}
+
+impl From<&File> for AudioFile {
+    fn from(file: &File) -> Self {
+        let tags = TagService::instance().get_all(file);
+        AudioFile::new(file.clone(), None, tags)
     }
 }
 

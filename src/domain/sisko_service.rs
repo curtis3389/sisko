@@ -1,6 +1,9 @@
-use super::{AudioFileService, LogHistory};
-use crate::domain::{AlbumService, AudioFile, File, FileService};
+use super::{
+    Album, AlbumRepository, AudioFile, AudioFileRepository, DomainEvent, File, FileService,
+    LogHistory,
+};
 use crate::infrastructure::acoustid::AcoustIdService;
+use crate::infrastructure::musicbrainz::{MusicBrainzService, Release, ReleaseLookup};
 use crate::ui::UiWrapper;
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
@@ -8,7 +11,7 @@ use sisko_lib::id3v2_tag::ID3v2Tag;
 use std::fs::File as FsFile;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 /// Represents a service for application actions.
 pub struct SiskoService {}
@@ -25,31 +28,31 @@ impl SiskoService {
     }
 
     pub fn add_file(&self, file: Arc<File>) -> Result<()> {
-        let audio_file = AudioFileService::instance().get(&file)?;
-        UiWrapper::instance().add_cluster_file(audio_file)?;
+        let mut audio_file = AudioFile::from(file.as_ref());
+        audio_file
+            .events
+            .push(DomainEvent::AudioFileAdded(audio_file.clone()));
+        AudioFileRepository::instance().add(audio_file.clone())?;
         Ok(())
     }
 
     pub fn add_folder(&self, file: Arc<File>) -> Result<()> {
         let files = FileService::instance().get_files_in_dir_recursive(&file.absolute_path)?;
-        let audio_files: Vec<Arc<Mutex<AudioFile>>> = files
-            .iter()
-            .map(|f| AudioFileService::instance().get(f))
-            .try_collect()?;
-        for t in audio_files {
-            UiWrapper::instance().add_cluster_file(t)?;
+        for file in files {
+            self.add_file(file)?;
         }
         Ok(())
     }
 
-    pub fn calculate_fingerprint(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
-        let path = {
-            let audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
-            audio_file.file.absolute_path.clone()
-        };
+    pub fn calculate_fingerprint(&self, audio_file: &AudioFile) -> Result<()> {
+        let path = audio_file.file.absolute_path.clone();
         let fingerprint = AcoustIdService::instance().get_fingerprint(&path).ok();
-        let mut audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
+        let mut audio_file = audio_file.clone();
         audio_file.fingerprint = fingerprint.or(audio_file.fingerprint.clone());
+        audio_file
+            .events
+            .push(DomainEvent::AudioFileUpdated(audio_file.clone()));
+        AudioFileRepository::instance().save(audio_file)?;
         Ok(())
     }
 
@@ -66,8 +69,7 @@ impl SiskoService {
         Ok(())
     }
 
-    pub fn save_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
-        let audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
+    pub fn save_audio_file(&self, audio_file: &AudioFile) -> Result<()> {
         let audio_bytes = Self::get_audio_bytes(&audio_file.file.absolute_path)?;
         let filename = &audio_file.file.name;
         let tag = audio_file.tags.first().ok_or_else(|| anyhow!(""))?;
@@ -76,6 +78,7 @@ impl SiskoService {
         bytes.extend(audio_bytes);
         let mut file = FsFile::create(filename)?;
         file.write_all(&bytes)?;
+        // if moved, replace original w/ copy w/ new file
         Ok(())
     }
 
@@ -92,17 +95,74 @@ impl SiskoService {
         Ok(file_content)
     }
 
-    pub fn select_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
+    pub fn select_audio_file(&self, audio_file: &AudioFile) -> Result<()> {
         UiWrapper::instance().set_metadata_table(audio_file)
     }
 
-    pub async fn scan_audio_file(&self, audio_file: &Arc<Mutex<AudioFile>>) -> Result<()> {
-        let album = AlbumService::instance()
-            .get_album_for_file(audio_file)
+    pub async fn scan_audio_file(&self, audio_file: &AudioFile) -> Result<()> {
+        // fingerprint
+        let file_path = audio_file.file.absolute_path.clone();
+        let fingerprint = AcoustIdService::instance().get_fingerprint(&file_path)?;
+
+        // acoustid
+        let lookup = AcoustIdService::instance()
+            .lookup_fingerprint(&fingerprint)
             .await?;
-        UiWrapper::instance().remove_cluster_file(audio_file)?;
-        UiWrapper::instance().add_album(album)?;
+
+        // recording
+        let recordingid = lookup[0].recordings[0].id.clone();
+        let mut audio_file = audio_file.clone();
+        audio_file.acoust_id = Some(lookup[0].id.clone());
+        audio_file.recording_id = Some(recordingid.clone());
+
+        // lookup
+        let lookup = MusicBrainzService::instance()
+            .lookup_releases_for_recording(&recordingid)
+            .await?;
+
+        // get album
+        let albums = self.load_lookup(&lookup)?;
+        let mut album = self.choose_album(&albums)?;
+        album.match_file(&audio_file)?;
+        album.update_tag_fields(&mut audio_file)?;
+        audio_file
+            .events
+            .push(DomainEvent::AudioFileUpdated(audio_file.clone()));
+        AudioFileRepository::instance().save(audio_file.clone())?;
+
+        // TODO: replace with event handler for AudioFileMatched
+        UiWrapper::instance().remove_cluster_file(&audio_file)?;
+        UiWrapper::instance().add_album(&album)?;
         Ok(())
+    }
+
+    fn choose_album(&self, albums: &[Album]) -> Result<Album> {
+        /*let (release, _) = lookup
+            .releases
+            .iter()
+            .map(|r| (r, self.get_priority(&r)))
+            .max_by(|(_, p1), (_, p2)| p1.total_cmp(p2))
+            .unwrap();
+        Ok(release.id.clone())*/
+        Ok(albums[0].clone())
+    }
+
+    fn get_priority(&self, release: &Release) -> f64 {
+        0.5
+    }
+
+    fn load_lookup(&self, lookup: &ReleaseLookup) -> Result<Vec<Album>> {
+        lookup
+            .releases
+            .iter()
+            .map(|r| self.load_release(r))
+            .collect()
+    }
+
+    fn load_release(&self, release: &Release) -> Result<Album> {
+        let album = Album::from(release);
+        AlbumRepository::instance().add(album.clone());
+        Ok(album)
     }
 }
 

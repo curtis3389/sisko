@@ -1,112 +1,82 @@
 use super::AudioFileColumn;
 use crate::domain::{Album, Track};
 use crate::infrastructure::DurationExtensions;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use cursive_table_view::TableViewItem;
 use log::error;
-use std::{
-    cmp::Ordering,
-    sync::{Arc, Mutex},
-};
+use std::cmp::Ordering;
 
 #[derive(Clone, Debug)]
 pub struct AlbumView {
     pub id: String,
     pub album_id: String,
-    pub album: Arc<Mutex<Album>>,
+    pub album: Album,
     pub track_id: Option<String>,
 }
 
 impl AlbumView {
-    pub fn for_album(album: &Arc<Mutex<Album>>) -> Result<Vec<AlbumView>> {
+    pub fn for_album(album: &Album) -> Result<Vec<AlbumView>> {
         let mut views = vec![];
-
-        views.push(AlbumView::try_from(album)?);
-        let am = album.clone();
-        let album = album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
-        let album_id = &album.id;
+        views.push(AlbumView::from(album));
         let mut tracks: Vec<AlbumView> = album
             .tracks
             .iter()
-            .map(|track| AlbumView::for_track(am.clone(), album_id.clone(), track))
+            .map(|track| AlbumView::for_track(album, album.id.clone(), track))
             .collect();
         views.append(&mut tracks);
-
         Ok(views)
     }
 
-    pub fn for_track(album: Arc<Mutex<Album>>, album_id: String, track: &Track) -> AlbumView {
+    pub fn for_track(album: &Album, album_id: String, track: &Track) -> AlbumView {
         Self {
             id: track.id.clone(),
             album_id,
-            album,
+            album: album.clone(),
             track_id: Some(track.id.clone()),
         }
     }
 
     pub fn artist(&self) -> Result<String> {
-        let album = self
-            .album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
         match &self.track_id {
-            None => Ok(album.artist.clone()),
-            Some(track_id) => Ok(album.track(track_id)?.artist.clone()),
+            None => Ok(self.album.artist.clone()),
+            Some(track_id) => Ok(self.album.track(track_id)?.artist.clone()),
         }
     }
 
     pub fn disc_number(&self) -> Result<i32> {
-        let album = self
-            .album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
         match &self.track_id {
             None => Ok(0),
-            Some(track_id) => Ok(album.track(track_id)?.disc_number),
+            Some(track_id) => Ok(self.album.track(track_id)?.disc_number),
         }
     }
 
     pub fn length(&self) -> Result<String> {
-        let album = self
-            .album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
         match &self.track_id {
-            None => Ok(album.length.to_pretty_string()),
-            Some(track_id) => Ok(album.track(track_id)?.length.to_pretty_string()),
+            None => Ok(self.album.length.to_pretty_string()),
+            Some(track_id) => Ok(self.album.track(track_id)?.length.to_pretty_string()),
         }
     }
 
     pub fn number(&self) -> Result<i32> {
-        let album = self
-            .album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
         match &self.track_id {
             None => Ok(0),
-            Some(track_id) => Ok(album.track(track_id)?.number),
+            Some(track_id) => Ok(self.album.track(track_id)?.number),
         }
     }
 
     pub fn title(&self) -> Result<String> {
-        let album = self
-            .album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
         match &self.track_id {
             None => {
-                let icon = match (album.is_all_matched(), album.has_changes()) {
+                let icon = match (self.album.is_all_matched(), self.album.has_changes()) {
                     (true, false) => "⦿",
                     (false, false) => "⦾",
                     (true, true) => "⦿⃰",
                     (false, true) => "⦾⃰",
                 };
-                Ok(format!("{} {}", icon, album.title.clone()))
+                Ok(format!("{} {}", icon, self.album.title.clone()))
             }
             Some(track_id) => {
-                let track = album.track(track_id)?;
+                let track = self.album.track(track_id)?;
                 let icon = match (track.has_match(), track.has_changes()) {
                     (true, false) => "✔",
                     (false, false) => " ",
@@ -122,19 +92,14 @@ impl AlbumView {
     }
 }
 
-impl TryFrom<&Arc<Mutex<Album>>> for AlbumView {
-    type Error = anyhow::Error;
-    fn try_from(album: &Arc<Mutex<Album>>) -> Result<Self> {
-        let am = album.clone();
-        let album = album
-            .lock()
-            .map_err(|_| anyhow!("Error locking album mutex!"))?;
-        Ok(Self {
+impl From<&Album> for AlbumView {
+    fn from(album: &Album) -> Self {
+        Self {
             id: album.id.clone(),
             album_id: album.id.clone(),
-            album: am,
+            album: album.clone(),
             track_id: None,
-        })
+        }
     }
 }
 

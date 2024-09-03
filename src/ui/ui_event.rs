@@ -1,7 +1,7 @@
 use super::{AlbumView, AudioFileView, TagFieldView};
 use crate::domain::{AudioFile, File};
 use std::fmt::Display;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub enum UiEvent {
@@ -10,8 +10,8 @@ pub enum UiEvent {
     OpenAddFile,
     OpenAddFolder,
     OpenLogs,
-    SaveAudioFile(Arc<Mutex<AudioFile>>),
-    ScanAudioFile(Arc<Mutex<AudioFile>>),
+    SaveAudioFile(AudioFile),
+    ScanAudioFile(AudioFile),
     SelectAlbumView(AlbumView),
     SelectClusterFile(AudioFileView),
     SubmitAlbumView(AlbumView),

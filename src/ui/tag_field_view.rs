@@ -4,13 +4,12 @@ use anyhow::{anyhow, Result};
 use cursive_table_view::TableViewItem;
 use log::error;
 use std::cmp::Ordering;
-use std::sync::{Arc, Mutex};
 
 /// Represents the UI view of a tag field.
 #[derive(Clone, Debug)]
 pub struct TagFieldView {
     /// The audio file the tag field is from.
-    pub audio_file: Arc<Mutex<AudioFile>>,
+    pub audio_file: AudioFile,
 
     /// The type of the tag the tag field is from.
     pub tag_type: TagType,
@@ -27,11 +26,7 @@ impl TagFieldView {
     /// * `audio_file` - The audio file the tag field is in.
     /// * `tag_type` - The type of the tag the field is in.
     /// * `field` - The type of the field.
-    pub fn new(
-        audio_file: &Arc<Mutex<AudioFile>>,
-        tag_type: &TagType,
-        field: &TagFieldType,
-    ) -> Self {
+    pub fn new(audio_file: &AudioFile, tag_type: &TagType, field: &TagFieldType) -> Self {
         Self {
             audio_file: audio_file.clone(),
             tag_type: tag_type.clone(),
@@ -41,11 +36,8 @@ impl TagFieldView {
 
     /// Returns the tag field referred to by this view.
     pub fn get_field(&self) -> Result<TagField> {
-        let audio_file = self
+        let tag = self
             .audio_file
-            .lock()
-            .map_err(|_| anyhow!("Error locking audio files mutex!"))?;
-        let tag = audio_file
             .tags
             .iter()
             .find(|tag| tag.tag_type == self.tag_type)
@@ -53,7 +45,7 @@ impl TagFieldView {
                 anyhow!(
                     "Couldn't find {} tag in {}!",
                     self.tag_type,
-                    audio_file.file.absolute_path.to_string_lossy()
+                    self.audio_file.file.absolute_path.to_string_lossy()
                 )
             })?;
         Ok(tag
@@ -65,7 +57,7 @@ impl TagFieldView {
                     "Couldn't find {} field in {} tag in {}!",
                     self.tag_field_type,
                     self.tag_type,
-                    audio_file.file.absolute_path.to_string_lossy()
+                    self.audio_file.file.absolute_path.to_string_lossy()
                 )
             })?
             .clone())

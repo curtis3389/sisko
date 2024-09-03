@@ -2,11 +2,10 @@ pub mod domain;
 pub mod infrastructure;
 pub mod ui;
 
-use crate::domain::SiskoService;
+use crate::domain::{DomainEvent, LogHistory, MediatorService, SiskoService};
 use crate::ui::{CursiveWrapper, UiEvent, UiEventService, UiWrapper};
 use anyhow::{anyhow, Result};
 use clap::Command;
-use domain::LogHistory;
 use log::{error, info, LevelFilter};
 use log4rs::append::file::FileAppender;
 use log4rs::append::Append;
@@ -144,19 +143,16 @@ pub async fn run_gui() -> Result<()> {
                 });
                 Ok(())
             }
-            UiEvent::SelectAlbumView(album_view) => album_view
-                .album
-                .lock()
-                .map_err(|_| anyhow!("Error locking album mutex!"))
-                .and_then(|album| {
-                    if let Some(track_id) = &album_view.track_id {
-                        let track = album.track(track_id)?;
-                        if let Some(audio_file) = track.matched_files.first() {
-                            SiskoService::instance().select_audio_file(audio_file)?;
-                        }
+            UiEvent::SelectAlbumView(album_view) => (|| {
+                if let Some(track_id) = &album_view.track_id {
+                    let track = album_view.album.track(track_id)?;
+                    if let Some(audio_file) = track.matched_files.first() {
+                        SiskoService::instance().select_audio_file(audio_file)?;
                     }
-                    Ok(())
-                }),
+                    // TODO: add select unmatched tracks & album
+                }
+                Ok(())
+            })(),
             UiEvent::SelectClusterFile(audio_file_view) => {
                 SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
             }
@@ -174,6 +170,25 @@ pub async fn run_gui() -> Result<()> {
             error!("Error processing event {event}: {error}!");
         }
     }))?;
+
+    // bind domain events to the ui
+    MediatorService::instance().add_handler(Box::new(|event| {
+        match event {
+            DomainEvent::AudioFileAdded(audio_file) => {
+                let copy = audio_file.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = SiskoService::instance().calculate_fingerprint(&copy) {
+                        error!("{}", e);
+                    }
+                });
+                UiWrapper::instance().add_cluster_file(audio_file.clone())?;
+            }
+            DomainEvent::AudioFileUpdated(audio_file) => {
+                UiWrapper::instance().add_cluster_file(audio_file.clone())?;
+            }
+        }
+        Ok(())
+    }));
 
     info!("Running GUI.");
     cursive.run()

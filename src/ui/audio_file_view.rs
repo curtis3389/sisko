@@ -1,47 +1,38 @@
 use crate::domain::AudioFile;
 use crate::ui::AudioFileColumn;
-use anyhow::{anyhow, Result};
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 /// Represents the UI view of a file that contains audio data..
 #[derive(Clone, Debug)]
 pub struct AudioFileView {
     /// The audio file.
-    pub audio_file: Arc<Mutex<AudioFile>>,
+    pub audio_file: AudioFile,
 
     pub path: PathBuf,
 }
 
 impl AudioFileView {
     pub fn artist(&self) -> String {
-        let audio_file = self.audio_file.lock().unwrap();
-        audio_file.artist().unwrap_or("<no artist>".to_string())
+        self.audio_file
+            .artist()
+            .unwrap_or("<no artist>".to_string())
     }
 
     pub fn length(&self) -> String {
-        let audio_file = self.audio_file.lock().unwrap();
-        audio_file.length().unwrap_or("?:??".to_string())
+        self.audio_file.length().unwrap_or("?:??".to_string())
     }
 
     pub fn title(&self) -> String {
-        let audio_file = self.audio_file.lock().unwrap();
-        audio_file.title().unwrap_or("<no title>".to_string())
+        self.audio_file.title().unwrap_or("<no title>".to_string())
     }
 }
 
-impl TryFrom<&Arc<Mutex<AudioFile>>> for AudioFileView {
-    type Error = anyhow::Error;
-
-    fn try_from(audio_file: &Arc<Mutex<AudioFile>>) -> Result<Self> {
-        let mutex = audio_file.clone();
-        let audio_file = audio_file.lock().map_err(|_| anyhow!(""))?;
-        Ok(Self {
-            audio_file: mutex,
-            path: audio_file.file.absolute_path.clone(),
-        })
+impl From<AudioFile> for AudioFileView {
+    fn from(audio_file: AudioFile) -> Self {
+        let path = audio_file.file.absolute_path.clone();
+        Self { audio_file, path }
     }
 }
 
