@@ -12,13 +12,16 @@ chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 cursive = "0.20.0"
 cursive_table_view = "0.14"
+futures = "0.3"
 itertools = "0.13.0"
 log4rs = "1.3"
 mime_guess = "2.0"
 regex = "1.10"
+rusqlite = { version = "0.30", features = ["backup", "blob", "chrono"] }
 serde_json = "1.0"
 sisko_lib = { path = "./sisko_lib" }
 tokio = { version = "1", features = ["full"] }
+tokio-rusqlite = "0.5"
 
 [dependencies.anyhow]
 version = "1.0"

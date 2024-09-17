@@ -2,8 +2,13 @@ pub mod domain;
 pub mod infrastructure;
 pub mod ui;
 
-use crate::domain::{DomainEvent, LogHistory, MediatorService, SiskoService};
-use crate::ui::{CursiveWrapper, UiEvent, UiEventService, UiWrapper};
+use crate::domain::events::DomainEvent;
+use crate::domain::models::{TagFieldId, TagId};
+use crate::domain::repos::{AudioFileRepository, TagRepository, TrackRepository};
+use crate::domain::services::{LogHistory, MediatorService, SiskoService};
+use crate::ui::events::UiEvent;
+use crate::ui::models::AlbumViewId;
+use crate::ui::services::{CursiveWrapper, Ui, UiEventService};
 use anyhow::{anyhow, Result};
 use clap::Command;
 use log::{error, info, LevelFilter};
@@ -122,48 +127,175 @@ pub async fn run_gui() -> Result<()> {
     UiEventService::instance().subscribe(Box::new(move |event| {
         let result = match event {
             UiEvent::OpenLogs => SiskoService::instance().open_logs(),
-            UiEvent::FileSelected(file) => SiskoService::instance().add_file(file.clone()),
-            UiEvent::FolderSelected(folder) => SiskoService::instance().add_folder(folder.clone()),
-            UiEvent::OpenAddFile => UiWrapper::instance().open_file_dialog(),
-            UiEvent::OpenAddFolder => UiWrapper::instance().open_directory_dialog(),
+            UiEvent::FileSelected(file) => {
+                let file = file.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = SiskoService::instance().add_file(file).await {
+                        error!("{}", e);
+                    }
+                });
+                Ok(())
+            }
+            UiEvent::FolderSelected(folder) => {
+                let folder = folder.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = SiskoService::instance().add_folder(folder).await {
+                        error!("{}", e);
+                    }
+                });
+                Ok(())
+            }
+            UiEvent::OpenAddFile => Ui::instance().menu.open_file_dialog(),
+            UiEvent::OpenAddFolder => Ui::instance().menu.open_directory_dialog(),
             UiEvent::SaveAudioFile(audio_file) => {
-                SiskoService::instance().save_audio_file(audio_file)
+                let audio_file = audio_file.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = SiskoService::instance().save_audio_file(&audio_file).await {
+                        error!("{}", e);
+                    }
+                });
+                Ok(())
             }
             UiEvent::ScanAudioFile(audio_file) => {
                 let audio_file = audio_file.clone();
                 tokio::spawn(async move {
-                    match SiskoService::instance().scan_audio_file(&audio_file).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            error!("{}", e);
-                            error!("{}", e.root_cause());
-                            error!("{}", e.backtrace());
+                    if let Err(e) = SiskoService::instance().scan_audio_file(&audio_file).await {
+                        error!("{}", e);
+                    }
+                });
+                Ok(())
+            }
+            UiEvent::SelectAlbumView(album_view) => {
+                let album_view = album_view.clone();
+                tokio::spawn(async move {
+                    match &album_view.id {
+                        AlbumViewId::Album(_album_id) => {
+                            // TODO: do something on select an album row?
+                        }
+                        AlbumViewId::Track(track_id) => {
+                            if let Ok(track) =
+                                TrackRepository::instance().get_by_key(track_id).await
+                            {
+                                if let Some(audio_file) = AudioFileRepository::instance()
+                                    .get_matched(&track)
+                                    .await
+                                    .ok()
+                                    .and_then(|files| files.into_iter().next())
+                                {
+                                    if let Err(e) = SiskoService::instance()
+                                        .select_audio_file(&audio_file.id)
+                                        .await
+                                    {
+                                        error!("{}", e);
+                                    }
+                                }
+                                // TODO: add select unmatched tracks & album
+                            }
                         }
                     }
                 });
                 Ok(())
             }
-            UiEvent::SelectAlbumView(album_view) => (|| {
-                if let Some(track_id) = &album_view.track_id {
-                    let track = album_view.album.track(track_id)?;
-                    if let Some(audio_file) = track.matched_files.first() {
-                        SiskoService::instance().select_audio_file(audio_file)?;
-                    }
-                    // TODO: add select unmatched tracks & album
-                }
-                Ok(())
-            })(),
             UiEvent::SelectClusterFile(audio_file_view) => {
-                SiskoService::instance().select_audio_file(&audio_file_view.audio_file)
+                let audio_file_view = audio_file_view.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = SiskoService::instance()
+                        .select_audio_file(&audio_file_view.id)
+                        .await
+                    {
+                        error!("{}", e);
+                    }
+                });
+                Ok(())
             }
             UiEvent::SubmitAlbumView(album_view) => {
-                UiWrapper::instance().open_album_view_dialog(album_view)
+                let album_view = album_view.clone();
+                tokio::spawn(async move {
+                    let audio_file = match &album_view.id {
+                        AlbumViewId::Album(_) => None,
+                        AlbumViewId::Track(track_id) => {
+                            match TrackRepository::instance().get_by_key(track_id).await {
+                                Ok(track) => {
+                                    match AudioFileRepository::instance().get_matched(&track).await
+                                    {
+                                        Ok(audio_files) => audio_files.into_iter().next(),
+                                        Err(e) => {
+                                            error!("{}", e);
+                                            None
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("{}", e);
+                                    None
+                                }
+                            }
+                        }
+                    };
+                    if let Err(e) = {
+                        Ui::instance()
+                            .album_table
+                            .open_album_view_dialog(&audio_file, &album_view.title)
+                    } {
+                        error!("{}", e);
+                    }
+                });
+                Ok(())
             }
             UiEvent::SubmitClusterFile(audio_file_view) => {
-                UiWrapper::instance().open_audio_file_dialog(audio_file_view)
+                let audio_file_view = audio_file_view.clone();
+                tokio::spawn(async move {
+                    match AudioFileRepository::instance()
+                        .get(&audio_file_view.id)
+                        .await
+                    {
+                        Ok(audio_file) => {
+                            let title = audio_file_view.title;
+                            if let Err(e) = Ui::instance()
+                                .cluster_table
+                                .open_audio_file_dialog(&audio_file, &title)
+                            {
+                                error!("{}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                        }
+                    }
+                });
+                Ok(())
             }
             UiEvent::SubmitMetadataRow(tag_field_view) => {
-                UiWrapper::instance().open_tag_field_dialog(tag_field_view)
+                let tag_field_view = tag_field_view.clone();
+                tokio::spawn(async move {
+                    let TagFieldId {
+                        tag_id:
+                            TagId {
+                                audio_file_id,
+                                tag_type,
+                            },
+                        tag_field_type,
+                    } = &tag_field_view.id;
+                    match AudioFileRepository::instance().get(audio_file_id).await {
+                        Ok(audio_file) => {
+                            match TagRepository::instance().get(&audio_file, tag_type).await {
+                                Ok(tag) => {
+                                    let field =
+                                        tag.get_field(tag_field_type.clone()).unwrap().clone();
+                                    if let Err(e) = Ui::instance()
+                                        .metadata_table
+                                        .open_tag_field_dialog(audio_file, *tag_type, field)
+                                    {
+                                        error!("{}", e);
+                                    }
+                                }
+                                Err(e) => error!("{}", e),
+                            }
+                        }
+                        Err(e) => error!("{}", e),
+                    }
+                });
+                Ok(())
             }
         };
         if let Err(error) = result {
@@ -175,16 +307,13 @@ pub async fn run_gui() -> Result<()> {
     MediatorService::instance().add_handler(Box::new(|event| {
         match event {
             DomainEvent::AudioFileAdded(audio_file) => {
-                let copy = audio_file.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = SiskoService::instance().calculate_fingerprint(&copy) {
-                        error!("{}", e);
-                    }
-                });
-                UiWrapper::instance().add_cluster_file(audio_file.clone())?;
+                SiskoService::instance().handle_audio_file_added(audio_file);
             }
             DomainEvent::AudioFileUpdated(audio_file) => {
-                UiWrapper::instance().add_cluster_file(audio_file.clone())?;
+                SiskoService::instance().handle_audio_file_updated(audio_file);
+            }
+            DomainEvent::TagUpdated(tag) => {
+                SiskoService::instance().handle_tag_updated(tag);
             }
         }
         Ok(())

@@ -1,11 +1,22 @@
-use std::time::Duration;
-
 pub mod acoustid;
+mod cursive_extensions;
+pub mod database;
+mod entity;
+pub mod file;
 pub mod musicbrainz;
-use itertools::Itertools;
+mod table_view_extensions;
+
+pub use cursive_extensions::*;
+pub use entity::*;
+pub use table_view_extensions::*;
 
 use anyhow::Result;
+use itertools::Itertools;
+use log::error;
+use std::future::Future;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::task::JoinHandle;
 
 pub type Am<T> = Arc<Mutex<T>>;
 pub type Ram<T> = Result<Am<T>>;
@@ -84,4 +95,53 @@ where
         })
         .collect_vec();
     singles.into_iter().chain(multis).chain(partials).collect()
+}
+
+pub fn spawn<F>(future: F) -> JoinHandle<()>
+where
+    F: Future<Output = Result<(), anyhow::Error>> + Send + 'static,
+{
+    tokio::spawn(async move {
+        if let Err(e) = future.await {
+            error!("{}", e);
+        }
+    })
+}
+
+pub enum MergeAction<'a, E>
+where
+    E: Entity,
+{
+    Add(&'a E),
+    None,
+    Remove(&'a E),
+    Update(&'a E),
+}
+
+pub fn merge<'a, E>(old: &'a [E], new: &'a [E]) -> Vec<MergeAction<'a, E>>
+where
+    E: Entity,
+    <E as Entity>::Id: EntityId,
+{
+    let mut results = vec![];
+
+    for o in old {
+        if let Some(n) = new.iter().find(|n| n.id() == o.id()) {
+            if o != n {
+                results.push(MergeAction::Update(n));
+            } else {
+                results.push(MergeAction::None);
+            }
+        } else {
+            results.push(MergeAction::Remove(o));
+        }
+    }
+
+    for n in new {
+        if !old.iter().any(|o| o.id() == n.id()) {
+            results.push(MergeAction::Add(n));
+        }
+    }
+
+    results
 }
