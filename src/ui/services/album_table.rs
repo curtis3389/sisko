@@ -1,6 +1,6 @@
 use super::{CbSinkService, UiEventService};
 use crate::{
-    domain::models::{Album, AudioFile, Tag, Track},
+    domain::models::{Album, AudioFile, Metadata, Track},
     ui::{
         events::UiEvent,
         models::{AlbumView, AlbumViewId, AudioFileColumn, MatchState, ALBUM_FILE_TABLE},
@@ -66,7 +66,7 @@ impl AlbumTable {
     }
 
     // need to match add_album
-    pub fn update_audio_file(&self, audio_file: &AudioFile, tags: &[Tag]) -> Result<()> {
+    pub fn update_audio_file(&self, audio_file: &AudioFile, metadata: &Metadata) -> Result<()> {
         let audio_file = audio_file.clone();
         CbSinkService::instance()?
             .send(Box::new(move |s: &mut Cursive| {

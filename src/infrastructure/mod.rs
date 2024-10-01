@@ -4,6 +4,7 @@ pub mod database;
 mod entity;
 pub mod file;
 pub mod musicbrainz;
+pub mod cursive_react;
 mod table_view_extensions;
 
 pub use cursive_extensions::*;
@@ -13,6 +14,7 @@ pub use table_view_extensions::*;
 use anyhow::Result;
 use itertools::Itertools;
 use log::error;
+use std::cmp::{max, min};
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -144,4 +146,147 @@ where
     }
 
     results
+}
+
+pub fn linear_combination_of_weights(parts: &[(f64, f64)]) -> f64 {
+    let mut total = 0.0;
+    let mut sum_of_products = 0.0;
+
+    for (value, weight) in parts {
+        // TODO: enforce 0 <= value <= 1 & weight >= 0
+        total += weight;
+        sum_of_products += value * weight;
+    }
+
+    sum_of_products / total
+}
+/*
+pub fn get_score(release: &Release) -> f64 {
+    release.score / 100.0
+}
+
+// This function and those it calls are ripped from picard:
+// https://github.com/metabrainz/picard/blob/95c8b72be586379f86bb853ed3b251e99b23f687/picard/metadata.py#L8
+pub fn compare_to_release(
+    tag_fields: &[TagField],
+    release: &Release,
+    weights: &HashMap<TagFieldType, f64>,
+) -> f64 {
+    let parts = compare_to_release_parts(tag_fields, release, weights);
+    let sim = linear_combination_of_weights(&parts) * get_score(release);
+    sim
+}
+
+pub fn compare_to_release_parts(
+    tag_fields: &[TagField],
+    release: &Release,
+    weights: &HashMap<TagFieldType, f64>,
+) -> Vec<(f64, f64)> {
+    let parts = vec![];
+    let field_types: Vec<TagFieldType> = vec![]; // TODO
+    for field_type in field_types {
+        if tag_fields.iter().any(|f| f.tag_field_type() == field_type)
+            && weights.contains_key(field_type)
+        {
+            parts.push((
+                similarity2(
+                    tag_fields
+                        .iter()
+                        .find(|f| f.tag_field_type() == field_type)
+                        .unwrap(),
+                    release[field_type],
+                ),
+                weights[field_type],
+            ));
+        }
+    }
+    parts
+}
+
+pub fn similarity2(a: &str, b: &str) -> f64 {
+    let SPLIT_WORDS_REGEX: Regex = Regex::new(r"\W+").unwrap();
+
+    if a == b {
+        return 1.0;
+    }
+
+    let a = a.to_lowercase();
+    let b = b.to_lowercase();
+    let a: Vec<&str> = SPLIT_WORDS_REGEX
+        .split(&a)
+        .filter(|s| !s.is_empty())
+        .collect();
+    let b: Vec<&str> = SPLIT_WORDS_REGEX
+        .split(&b)
+        .filter(|s| !s.is_empty())
+        .collect();
+    let (a, mut b) = if a.len() > b.len() { (b, a) } else { (a, b) };
+
+    if a.len() == 0 || b.len() == 0 {
+        return 0.0;
+    }
+
+    let mut score = 0.0;
+    for a_word in &a {
+        let mut ms = 0.0;
+        let mut mp: Option<usize> = None;
+        for (index, b_word) in b.iter().enumerate() {
+            let s = levenshtein_distance(a_word, b_word);
+            if s > ms {
+                ms = s;
+                mp = Some(index);
+            }
+        }
+        if let Some(index) = mp {
+            score += ms;
+            if ms > 0.6 {
+                b.remove(index);
+            }
+        }
+    }
+
+    // a.len() must be > 0 here, so no divide by zero
+    score / (a.len() as f64 + (b.len() as f64 * 0.4))
+}*/
+
+pub fn levenshtein_distance(a: &str, b: &str) -> f64 {
+    let (a, b) = if a.len() > b.len() { (b, a) } else { (a, b) };
+
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+
+    let mut current: Vec<usize> = (0..a.len() + 1).collect();
+    for i in 1..b.len() + 1 {
+        let previous = current;
+        current = vec![0_usize; a.len() + 1];
+        current.insert(0, i);
+        for j in 1..a.len() + 1 {
+            let (add, delete) = (previous[j] + 1, current[j - 1] + 1);
+            let mut change = previous[j - 1];
+            if a.chars().nth(j - 1) != b.chars().nth(i - 1) {
+                change += 1;
+            }
+            current[j] = min(add, min(delete, change));
+        }
+    }
+
+    // current[a.len()] is the edit distance; we return % similarity
+    1.0 - (current[a.len()] as f64 / max(a.len(), b.len()) as f64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn levenshtein_distance_works() {
+        assert_eq!(levenshtein_distance("book", "back"), 0.5);
+        assert_eq!(levenshtein_distance("test", "grammar"), 0.0);
+        assert_eq!(
+            levenshtein_distance("washington", "lincoln"),
+            (1.0 - 7.0 / 10.0)
+        );
+        assert_eq!(levenshtein_distance("stink", "link"), 0.6);
+    }
 }

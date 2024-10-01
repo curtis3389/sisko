@@ -326,6 +326,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cursive_react"
+version = "0.1.0"
+
+[[package]]
 name = "cursive_table_view"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

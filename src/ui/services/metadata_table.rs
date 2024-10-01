@@ -1,7 +1,7 @@
 use super::CbSinkService;
 use crate::{
     domain::{
-        models::{AudioFile, Tag, TagField, TagType},
+        models::{AudioFile, FieldValue, FieldValueExtensions, Metadata, MetadataField},
         repos::TagRepository,
     },
     infrastructure::{merge, spawn, MergeAction, TableViewExtensions},
@@ -25,25 +25,20 @@ impl MetadataTable {
         Self {}
     }
 
-    pub fn open_tag_field_dialog(
-        &self,
-        audio_file: AudioFile,
-        tag_type: TagType,
-        field: TagField,
-    ) -> Result<()> {
+    pub fn open_tag_field_dialog(&self, audio_file: AudioFile, field: MetadataField) -> Result<()> {
         CbSinkService::instance()?
             .send(Box::new(move |s: &mut Cursive| {
-                if let Err(e) = tag_field_dialog(s, audio_file, tag_type, field) {
+                if let Err(e) = tag_field_dialog(s, audio_file, field) {
                     error!("Error opening tag field dialog: {e}!");
                 }
             }))
             .map_err(|_| anyhow!("Error sending open tag field dialog callback to CbSink!"))
     }
 
-    pub fn set_metadata_table(&self, tags: &[Tag]) -> Result<()> {
-        let items: Vec<TagFieldView> = tags
+    pub fn set_metadata_table(&self, metadata: &Metadata) -> Result<()> {
+        let items: Vec<TagFieldView> = metadata
             .iter()
-            .flat_map(|tag| tag.fields.iter().map(TagFieldView::new))
+            .map(|field| TagFieldView::new(&metadata.audio_file_id, field))
             .collect();
         CbSinkService::instance()?
             .send(Box::new(move |s: &mut Cursive| {
@@ -57,10 +52,10 @@ impl MetadataTable {
             .map_err(|_| anyhow!("Error sending set metadata table callback to CbSink!"))
     }
 
-    pub fn update_metadata_table(&self, tags: &[Tag]) -> Result<()> {
-        let items: Vec<TagFieldView> = tags
+    pub fn update_metadata_table(&self, metadata: &Metadata) -> Result<()> {
+        let items: Vec<TagFieldView> = metadata
             .iter()
-            .flat_map(|tag| tag.fields.iter().map(TagFieldView::new))
+            .map(|field| TagFieldView::new(&metadata.audio_file_id, field))
             .collect();
         CbSinkService::instance()?
             .send(Box::new(move |s: &mut Cursive| {
@@ -126,13 +121,8 @@ impl Default for MetadataTable {
 ///
 /// * `s` - The Cursive to open the dialog with.
 /// * `view` - The tag field view to open the dialog for.
-fn tag_field_dialog(
-    s: &mut Cursive,
-    audio_file: AudioFile,
-    tag_type: TagType,
-    field: TagField,
-) -> Result<()> {
-    let title = field.display_name();
+fn tag_field_dialog(s: &mut Cursive, audio_file: AudioFile, field: MetadataField) -> Result<()> {
+    let title = field.field_type.display_name();
     let name = LinearLayout::horizontal()
         .child(TextView::new(String::from("Tag: ")).style(Style {
             effects: enum_set!(Effect::Bold),
@@ -146,31 +136,33 @@ fn tag_field_dialog(
                 color: ColorStyle::inherit_parent(),
             }),
         )
-        .child(TextView::new(field.display_value()));
-    let mut new_value =
+        .child(TextView::new(field.old_value.display_value()));
+    let mut new_value_widget =
         LinearLayout::horizontal().child(TextView::new(String::from("New Value: ")).style(Style {
             effects: enum_set!(Effect::Bold),
             color: ColorStyle::inherit_parent(),
         }));
-    match &field {
-        TagField::Binary(_, _, _new_field_value) => todo!("add file selector"),
-        TagField::Text(_, _, new_field_value) => new_value.add_child(
+    match field.new_value {
+        Some(FieldValue::Binary(_bytes)) => todo!("add file selector"),
+        Some(FieldValue::Text(text)) => new_value_widget.add_child(
             EditView::new()
-                .content(new_field_value.clone().unwrap_or(String::new()))
+                .content(text.clone())
                 .with_name(NEW_FIELD_VALUE)
                 .fixed_width(32),
         ),
-        TagField::Unknown(_, _) => new_value.add_child(TextView::new(String::new())),
+        _ => new_value_widget.add_child(TextView::new(String::new())),
     }
     let layout = LinearLayout::vertical()
         .child(name)
         .child(value)
-        .child(new_value);
+        .child(new_value_widget);
+    let field_type = field.field_type.clone();
     let dialog = Dialog::around(layout)
         .title(title)
         .button("Save", move |s: &mut Cursive| {
             let audio_file = audio_file.clone();
-            if let Err(e) = || -> Result<()> {
+            let field_type = field_type.clone();
+            if let Err(e) = move || -> Result<()> {
                 let new_field_value = s
                     .call_on_name(NEW_FIELD_VALUE, |edit_view: &mut EditView| {
                         edit_view.get_content().as_ref().clone()
@@ -181,18 +173,11 @@ fn tag_field_dialog(
                             NEW_FIELD_VALUE
                         )
                     })?;
-                let field = field.clone();
-                let field = match field {
-                    TagField::Binary(_, _, _new_field_value) => todo!("handle selected file"),
-                    TagField::Text(tag_field_type, value, _) => {
-                        TagField::Text(tag_field_type, value, Some(new_field_value))
-                    }
-                    TagField::Unknown(_, _) => field,
-                };
+                let field_type = field_type.clone();
                 spawn(async move {
                     let repo = TagRepository::instance();
-                    let mut tag = repo.get(&audio_file, &tag_type).await?;
-                    tag.update_field(field);
+                    let mut tag = repo.get(&audio_file).await?;
+                    tag.update(&field_type, FieldValue::Text(new_field_value));
                     repo.save(tag).await
                 });
                 s.pop_layer();

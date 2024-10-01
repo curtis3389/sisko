@@ -1,5 +1,5 @@
 use super::AudioFileColumn;
-use crate::domain::models::{AudioFile, AudioFileId, Tag, Tags};
+use crate::domain::models::{AudioFile, AudioFileId, Metadata};
 use cursive_table_view::TableViewItem;
 use std::cmp::Ordering;
 
@@ -13,12 +13,12 @@ pub struct AudioFileView {
 }
 
 impl AudioFileView {
-    pub fn new(audio_file: &AudioFile, tags: &Vec<Tag>) -> Self {
+    pub fn new(audio_file: &AudioFile, metadata: &Metadata) -> Self {
         Self {
-            artist: tags.artist().unwrap_or("<no artist>".to_string()),
+            artist: metadata.artist().unwrap_or("<no artist>".to_string()),
             id: audio_file.id.clone(),
             length: audio_file.length().unwrap_or("?:??".to_string()),
-            title: tags.title().unwrap_or("<no title>".to_string()),
+            title: metadata.title().unwrap_or("<no title>".to_string()),
         }
     }
 }

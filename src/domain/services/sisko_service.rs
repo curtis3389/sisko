@@ -1,5 +1,5 @@
 use crate::domain::events::DomainEvent;
-use crate::domain::models::{Album, AudioFile, AudioFileId, Tag, TagField, TagId, TagType, Track};
+use crate::domain::models::{Album, AudioFile, AudioFileId, Metadata, Track};
 use crate::domain::repos::{AlbumRepository, AudioFileRepository, TagRepository, TrackRepository};
 use crate::domain::services::LogHistory;
 use crate::infrastructure::acoustid::AcoustIdService;
@@ -10,11 +10,10 @@ use crate::ui::models::MatchState;
 use crate::ui::services::Ui;
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
-use log::error;
 use sisko_lib::id3v2_tag::ID3v2Tag;
 use std::fs::File as FsFile;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 /// Represents a service for application actions.
@@ -67,54 +66,46 @@ impl SiskoService {
         spawn(async move { SiskoService::instance().calculate_fingerprint(&copy).await });
         let copy = audio_file.clone();
         spawn(async move {
-            let tags = TagRepository::instance().get_all(&copy).await?;
-            Ui::instance().cluster_table.add_cluster_file(copy, &tags)
+            let tag = TagRepository::instance().get(&copy).await?;
+            Ui::instance().cluster_table.add_cluster_file(copy, &tag)
         });
     }
 
     pub fn handle_audio_file_updated(&self, audio_file: &AudioFile) {
         let audio_file = audio_file.clone();
         spawn(async move {
-            let tags = TagRepository::instance().get_all(&audio_file).await?;
+            let tag = TagRepository::instance().get(&audio_file).await?;
             Ui::instance()
                 .cluster_table
-                .add_cluster_file(audio_file, &tags)
+                .add_cluster_file(audio_file, &tag)
         });
     }
 
-    pub fn handle_tag_updated(&self, tag: &Tag) {
-        let tag = tag.clone();
+    pub fn handle_tag_updated(&self, metadata: &Metadata) {
+        let metadata = metadata.clone();
         spawn(async move {
             let ui = Ui::instance();
             let audio_file = AudioFileRepository::instance()
-                .get(&tag.id.audio_file_id)
+                .get(&metadata.audio_file_id)
                 .await?;
-            let tags = TagRepository::instance().get_all(&audio_file).await?;
+            let metadata = TagRepository::instance().get(&audio_file).await?;
+            // TODO: this doesn't seem right
             ui.cluster_table
-                .add_cluster_file(audio_file.clone(), &tags)?;
-            ui.album_table.update_audio_file(&audio_file, &tags)?;
-            ui.metadata_table.update_metadata_table(&tags)
+                .add_cluster_file(audio_file.clone(), &metadata)?;
+            ui.album_table.update_audio_file(&audio_file, &metadata)?;
+            ui.metadata_table.update_metadata_table(&metadata)
         });
     }
 
     pub async fn load_tags(&self, file: &File) -> Result<()> {
-        let mut tags = vec![];
         // TODO: check if has tag before reading
         if let Ok(id3v2) = ID3v2Tag::read_from_path(&file.absolute_path) {
-            let tag_id = TagId {
-                audio_file_id: AudioFileId::new(file.absolute_path.clone()),
-                tag_type: TagType::ID3v2,
-            };
-            tags.push(Tag::new(
-                tag_id.clone(),
-                TagField::parse_all(&tag_id, &id3v2.frames),
-            ));
+            let metadata =
+                Metadata::from_id3v2(AudioFileId::new(file.absolute_path.clone()), &id3v2.frames);
+            TagRepository::instance().add(metadata).await?;
         }
-        // TODO: add loading other possible tags
 
-        for tag in tags {
-            TagRepository::instance().add(tag).await?;
-        }
+        // TODO: add loading other possible tags
         Ok(())
     }
 
@@ -131,6 +122,14 @@ impl SiskoService {
         Ok(())
     }
 
+    pub async fn remove_file(&self, audio_file: &AudioFile) -> Result<()> {
+        let mut audio_file = audio_file.clone();
+        audio_file
+            .events
+            .push(DomainEvent::AudioFileRemoved(audio_file.id.clone()));
+        AudioFileRepository::instance().remove(audio_file).await
+    }
+
     pub async fn save_audio_file(&self, audio_file: &AudioFile) -> Result<()> {
         let audio_bytes = Self::get_audio_bytes(&audio_file.id.path)?;
         let filename = &audio_file
@@ -140,14 +139,22 @@ impl SiskoService {
             .unwrap()
             .to_string_lossy()
             .to_string();
-        let tags = TagRepository::instance().get_all(audio_file).await?;
-        let tag = tags.first().ok_or_else(|| anyhow!(""))?;
-        let tag = ID3v2Tag::from(tag);
+        let tag = TagRepository::instance().get(audio_file).await?;
+        let tag = ID3v2Tag::from(&tag);
         let mut bytes = tag.to_bytes();
         bytes.extend(audio_bytes);
         let mut file = FsFile::create(filename)?;
         file.write_all(&bytes)?;
+
         // TODO: if moved, replace original w/ copy w/ new file
+        let new_file = Path::new(filename);
+        let new_file = FileService::instance().get(new_file)?;
+        if new_file.absolute_path != audio_file.id.path {
+            // TODO: copy data from old to new
+            self.add_file(new_file).await?;
+            self.remove_file(audio_file).await?;
+        }
+
         Ok(())
     }
 
@@ -166,8 +173,8 @@ impl SiskoService {
 
     pub async fn select_audio_file(&self, audio_file_id: &AudioFileId) -> Result<()> {
         let audio_file = AudioFileRepository::instance().get(audio_file_id).await?;
-        let tags = TagRepository::instance().get_all(&audio_file).await?;
-        Ui::instance().metadata_table.set_metadata_table(&tags)
+        let tag = TagRepository::instance().get(&audio_file).await?;
+        Ui::instance().metadata_table.set_metadata_table(&tag)
     }
 
     pub async fn scan_audio_file(&self, audio_file: &AudioFile) -> Result<()> {
@@ -196,29 +203,16 @@ impl SiskoService {
         let album = self.choose_album(&albums)?;
         let tracks = TrackRepository::instance().get_all(&album).await?;
         let matched_track = audio_file.match_to_album(&album, &tracks)?;
-        let updated_tags = TagRepository::instance().get_all(&audio_file).await?;
-        let updated_tags = audio_file.update_tags(&album, &matched_track, updated_tags);
+        let mut updated_tag = TagRepository::instance().get(&audio_file).await?;
+        updated_tag.update_for_match(&audio_file, &album, &matched_track);
         audio_file
             .events
             .push(DomainEvent::AudioFileUpdated(audio_file.clone()));
         AudioFileRepository::instance()
             .save(audio_file.clone())
             .await?;
-        for tag in updated_tags {
-            TagRepository::instance().save(tag).await?
-        }
-        let mut match_states = vec![];
-        for track in &tracks {
-            let matches = AudioFileRepository::instance().get_matched(track).await?;
-            let is_matched = !matches.is_empty();
-            let mut has_changes: Vec<bool> = vec![];
-            for m in matches {
-                let tags = TagRepository::instance().get_all(&m).await?;
-                has_changes.push(tags.iter().any(|tag| tag.has_changes()));
-            }
-            let has_changes = has_changes.iter().any(|h| *h);
-            match_states.push(MatchState::from((is_matched, has_changes)));
-        }
+        TagRepository::instance().save(updated_tag).await?;
+        let match_states = MatchState::for_tracks(&tracks).await?;
 
         // TODO: replace with event handler for AudioFileMatched
         Ui::instance()
@@ -228,6 +222,30 @@ impl SiskoService {
             .album_table
             .add_album(&album, &tracks, &match_states)?;
         Ok(())
+    }
+
+    pub fn update_ui(&self) {
+        spawn(async move {
+            let audio_files = AudioFileRepository::instance().get_all().await?;
+            for audio_file in audio_files.into_iter().filter(|f| f.track_id.is_none()) {
+                let metadata = TagRepository::instance().get(&audio_file).await?;
+                Ui::instance()
+                    .cluster_table
+                    .add_cluster_file(audio_file, &metadata)?;
+            }
+
+            let albums = AlbumRepository::instance().get_all().await?;
+            for album in &albums {
+                let tracks = TrackRepository::instance().get_all(album).await?;
+                let match_states = MatchState::for_tracks(&tracks).await?;
+                if match_states.iter().any(|s| s.is_matched()) {
+                    Ui::instance()
+                        .album_table
+                        .add_album(album, &tracks, &match_states)?;
+                }
+            }
+            Ok(())
+        });
     }
 
     fn choose_album(&self, albums: &[Album]) -> Result<Album> {

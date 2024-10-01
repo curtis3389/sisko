@@ -11,6 +11,7 @@ use std::time::SystemTime;
 
 /// Represents a service for working with files backed by the native filesystem.
 pub struct FileService {
+    // TODO: remove this cache
     /// The files loaded into the service.
     files: Mutex<HashMap<PathBuf, Arc<File>>>,
 }

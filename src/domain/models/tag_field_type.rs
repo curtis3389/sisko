@@ -4,7 +4,7 @@ use sisko_lib::{id3v2_frame::ID3v2Frame, id3v2_frame_fields::ID3v2FrameFields};
 use std::fmt::Display;
 
 /// Represents the type of a field in a tag.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum TagFieldType {
     AcoustId,
     Album,

@@ -1,10 +1,10 @@
-use crate::domain::models::Tag;
+use crate::domain::models::Metadata;
 
 /// Represents the UI view of a tag.
 pub struct TagView {}
 
-impl From<&Tag> for TagView {
-    fn from(_tag: &Tag) -> Self {
+impl From<&Metadata> for TagView {
+    fn from(_tag: &Metadata) -> Self {
         Self {}
     }
 }

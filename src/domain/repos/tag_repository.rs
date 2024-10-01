@@ -1,12 +1,12 @@
 use crate::domain::events::DomainEvent;
 use crate::domain::models::{
-    AudioFile, AudioFileId, Tag, TagField, TagFieldId, TagFieldType, TagId, TagType,
+    AudioFile, AudioFileId, FieldValue, Metadata, MetadataField, TagFieldType,
 };
 use crate::domain::services::MediatorService;
 use crate::infrastructure::database::Database;
 use anyhow::Result;
 use itertools::Itertools;
-use rusqlite::{named_params, Error, Row};
+use rusqlite::{named_params, Row};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -24,241 +24,207 @@ impl TagRepository {
         Self {}
     }
 
-    pub async fn add(&self, tag: Tag) -> Result<()> {
-        let events = tag.events.clone();
-        Self::insert(tag).await?;
-        Database::instance()
-            .connection
-            .call_unwrap(|connection| {
-                connection.backup(rusqlite::DatabaseName::Main, "db.sqlite", None)
-            })
-            .await?;
+    pub async fn add(&self, metadata: Metadata) -> Result<()> {
+        let events = metadata.events.clone();
+        Self::insert(metadata).await?;
+        // TODO: move this to a menu action
+        /*Database::instance()
+        .connection
+        .call_unwrap(|connection| {
+            connection.backup(rusqlite::DatabaseName::Main, "db.sqlite", None)
+        })
+        .await?;*/
         Self::publish_events(events)?;
         Ok(())
     }
 
-    pub async fn get(&self, audio_file: &AudioFile, tag_type: &TagType) -> Result<Tag> {
-        Self::select(&audio_file.id.path, tag_type).await
+    pub async fn get(&self, audio_file: &AudioFile) -> Result<Metadata> {
+        Self::select(&audio_file.id.path).await
     }
 
-    pub async fn get_all(&self, audio_file: &AudioFile) -> Result<Vec<Tag>> {
-        let mut tags = vec![];
-        for tag_type in [
-            TagType::FLAC,
-            TagType::ID3v1,
-            TagType::ID3v2,
-            TagType::Vorbis,
-        ] {
-            if let Ok(tag) = self.get(audio_file, &tag_type).await {
-                tags.push(tag);
-            }
-        }
-        Ok(tags)
-    }
-
-    pub async fn remove(&self, tag: Tag) -> Result<()> {
-        let events = tag.events.clone();
-        Self::delete(tag).await?;
+    pub async fn remove(&self, metadata: Metadata) -> Result<()> {
+        let events = metadata.events.clone();
+        Self::delete(metadata).await?;
         Self::publish_events(events)?;
         Ok(())
     }
 
-    pub async fn save(&self, tag: Tag) -> Result<()> {
-        let events = tag.events.clone();
-        Self::update(tag).await?;
+    pub async fn save(&self, metadata: Metadata) -> Result<()> {
+        let events = metadata.events.clone();
+        Self::update(metadata).await?;
         Self::publish_events(events)?;
         Ok(())
     }
 
-    async fn delete(tag: Tag) -> Result<()> {
-        let audio_file_id = tag.id.audio_file_id.path.clone();
-        let tag_type = tag.id.tag_type;
+    async fn delete(metadata: Metadata) -> Result<()> {
+        let audio_file_id = metadata.audio_file_id.path.clone();
         const COMMAND: &str = r#"
-            DELETE FROM tag_fields
-            WHERE
-                audio_file_id = :audio_file_id
-                AND tag_type = :tag_type
+            DELETE FROM metadat_fields
+            WHERE audio_file_id = :audio_file_id
         "#;
         Database::instance()
             .connection
-            .call_unwrap(move |connection| connection.execute(COMMAND, named_params! {":audio_file_id": audio_file_id.to_string_lossy(), ":tag_type": tag_type.as_str()}))
+            .call_unwrap(move |connection| {
+                connection.execute(
+                    COMMAND,
+                    named_params! {":audio_file_id": audio_file_id.to_string_lossy()},
+                )
+            })
             .await?;
         Ok(())
     }
 
-    async fn insert(tag: Tag) -> Result<()> {
-        for tag_field in tag.fields {
-            Self::insert_field(&tag.id.audio_file_id.path, &tag.id.tag_type, tag_field).await?;
+    async fn insert(metadata: Metadata) -> Result<()> {
+        let fields = metadata
+            .iter()
+            .map(|field| {
+                (
+                    metadata.audio_file_id.path.to_path_buf(),
+                    field.field_type.clone(),
+                    field.old_value.clone(),
+                    field.new_value.clone(),
+                )
+            })
+            .collect_vec();
+        for (audio_file_id, field_type, old_value, new_value) in fields {
+            Self::insert_field(audio_file_id, field_type, old_value, new_value).await?;
         }
         Ok(())
     }
 
     async fn insert_field(
-        audio_file_id: &Path,
-        tag_type: &TagType,
-        tag_field: TagField,
+        audio_file_id: PathBuf,
+        field_type: TagFieldType,
+        old_value: Option<FieldValue>,
+        new_value: Option<FieldValue>,
     ) -> Result<()> {
-        let audio_file_id = audio_file_id.to_path_buf();
-        let tag_type = *tag_type;
         const COMMAND: &str = r#"
-            INSERT INTO tag_fields (
+            INSERT INTO metadata_fields (
                 audio_file_id,
-                tag_type,
-                tag_field_type,
-                discriminator,
+                field_type,
+                value_discriminator,
                 value,
+                new_value_discriminator
                 new_value)
             VALUES (
                 :audio_file_id,
-                :tag_type,
-                :tag_field_type,
-                :discriminator,
+                :field_type,
+                :value_discriminator,
                 :value,
+                :new_value_discriminator,
                 :new_value)
         "#;
         Database::instance()
             .connection
-            .call_unwrap(move |connection| match tag_field {
-                TagField::Binary(id, value, new_value) => connection.execute(
+            .call_unwrap(move |connection| {
+                connection.execute(
                     COMMAND,
                     named_params! {
                         ":audio_file_id": audio_file_id.to_string_lossy(),
-                        ":tag_type": tag_type.as_str(),
-                        ":tag_field_type": id.tag_field_type.display_name(),
-                        ":discriminator": "Binary",
-                        ":value": value,
+                        ":field_type": field_type.display_name(),
+                        ":value_discriminator": old_value.as_ref().map(|v| v.discriminator()),
+                        ":value": old_value,
+                        ":new_value_discriminator": new_value.as_ref().map(|v| v.discriminator()),
                         ":new_value": new_value,
                     },
-                ),
-                TagField::Text(id, value, new_value) => connection.execute(
-                    COMMAND,
-                    named_params! {
-                        ":audio_file_id": audio_file_id.to_string_lossy(),
-                        ":tag_type": tag_type.as_str(),
-                        ":tag_field_type": id.tag_field_type.display_name(),
-                        ":discriminator": "Text",
-                        ":value": value,
-                        ":new_value": new_value,
-                    },
-                ),
-                TagField::Unknown(id, value) => connection.execute(
-                    COMMAND,
-                    named_params! {
-                        ":audio_file_id": audio_file_id.to_string_lossy(),
-                        ":tag_type": tag_type.as_str(),
-                        ":tag_field_type": id.tag_field_type.display_name(),
-                        ":discriminator": "Unknown",
-                        ":value": value,
-                        ":new_value": None::<String>,
-                    },
-                ),
+                )
             })
             .await?;
         Ok(())
     }
 
-    async fn select(audio_file_id: &Path, tag_type: &TagType) -> Result<Tag> {
+    async fn select(audio_file_id: &Path) -> Result<Metadata> {
         let id = audio_file_id.to_path_buf();
-        let ttype = *tag_type;
         const COMMAND: &str = r#"
             SELECT
                 audio_file_id,
-                tag_type,
-                tag_field_type,
-                discriminator,
+                field_type,
+                value_discriminator,
                 value,
+                new_value_discriminator,
                 new_value
-            FROM tag_fields
-            WHERE
-                audio_file_id = :audio_file_id
-                AND tag_type = :tag_type
+            FROM metadata_fields
+            WHERE audio_file_id = :audio_file_id
         "#;
         let fields = Database::instance()
             .connection
-            .call_unwrap(move |connection| -> Result<Vec<TagField>> {
+            .call_unwrap(move |connection| -> Result<Vec<MetadataField>> {
                 let mut statement = connection.prepare(COMMAND)?;
-                let fields: Vec<TagField> = statement
-                    .query_map(named_params! {":audio_file_id": id.to_string_lossy(), ":tag_type": ttype.as_str()}, |row| TagField::try_from(row))?.try_collect()?;
+                let fields: Vec<MetadataField> = statement
+                    .query_map(
+                        named_params! {":audio_file_id": id.to_string_lossy()},
+                        |row| Ok(to_field(row)),
+                    )?
+                    .try_collect()?;
                 Ok(fields)
             })
             .await?;
-        Ok(Tag::new(
-            TagId::new(AudioFileId::new(audio_file_id.to_path_buf()), *tag_type),
+        Ok(Metadata::from_fields(
+            AudioFileId::new(audio_file_id.to_path_buf()),
             fields,
         ))
     }
 
-    async fn update(tag: Tag) -> Result<()> {
-        for tag_field in tag.fields {
-            Self::upsert_field(&tag.id.audio_file_id.path, &tag.id.tag_type, tag_field).await?;
+    async fn update(metadata: Metadata) -> Result<()> {
+        let fields = metadata
+            .iter()
+            .map(|field| {
+                (
+                    metadata.audio_file_id.path.to_path_buf(),
+                    field.field_type.clone(),
+                    field.old_value.clone(),
+                    field.new_value.clone(),
+                )
+            })
+            .collect_vec();
+        for (audio_file_id, field_type, old_value, new_value) in fields {
+            Self::upsert_field(audio_file_id, field_type, old_value, new_value).await?;
         }
         Ok(())
     }
 
     async fn upsert_field(
-        audio_file_id: &Path,
-        tag_type: &TagType,
-        tag_field: TagField,
+        audio_file_id: PathBuf,
+        field_type: TagFieldType,
+        old_value: Option<FieldValue>,
+        new_value: Option<FieldValue>,
     ) -> Result<()> {
-        let audio_file_id = audio_file_id.to_path_buf();
-        let tag_type = *tag_type;
         const COMMAND: &str = r#"
-            INSERT INTO tag_fields (
+            INSERT INTO metadata_fields (
                 audio_file_id,
-                tag_type,
-                tag_field_type,
-                discriminator,
+                field_type,
+                value_discriminator,
                 value,
+                new_value_discriminator,
                 new_value)
             VALUES (
                 :audio_file_id,
-                :tag_type,
-                :tag_field_type,
-                :discriminator,
+                :field_type,
+                :value_discriminator,
                 :value,
+                :new_value_discriminator,
                 :new_value)
-            ON CONFLICT(audio_file_id, tag_type, tag_field_type)
+            ON CONFLICT(audio_file_id, field_type)
             DO UPDATE SET
-                discriminator = :discriminator,
+                value_discriminator = :value_discriminator,
                 value = :value,
+                new_value_discriminator = :new_value_discriminator,
                 new_value = :new_value
         "#;
         Database::instance()
             .connection
-            .call_unwrap(move |connection| match tag_field {
-                TagField::Binary(id, value, new_value) => connection.execute(
+            .call_unwrap(move |connection| {
+                connection.execute(
                     COMMAND,
                     named_params! {
                         ":audio_file_id": audio_file_id.to_string_lossy(),
-                        ":tag_type": tag_type.as_str(),
-                        ":tag_field_type": id.tag_field_type.display_name(),
-                        ":discriminator": "Binary",
-                        ":value": value,
+                        ":field_type": field_type.display_name(),
+                        ":value_discriminator": old_value.as_ref().map(|v| v.discriminator()),
+                        ":value": old_value,
+                        ":new_value_discriminator": new_value.as_ref().map(|v| v.discriminator()),
                         ":new_value": new_value,
                     },
-                ),
-                TagField::Text(id, value, new_value) => connection.execute(
-                    COMMAND,
-                    named_params! {
-                        ":audio_file_id": audio_file_id.to_string_lossy(),
-                        ":tag_type": tag_type.as_str(),
-                        ":tag_field_type": id.tag_field_type.display_name(),
-                        ":discriminator": "Text",
-                        ":value": value,
-                        ":new_value": new_value,
-                    },
-                ),
-                TagField::Unknown(id, value) => connection.execute(
-                    COMMAND,
-                    named_params! {
-                        ":audio_file_id": audio_file_id.to_string_lossy(),
-                        ":tag_type": tag_type.as_str(),
-                        ":tag_field_type": id.tag_field_type.display_name(),
-                        ":discriminator": "Unknown",
-                        ":value": value,
-                        ":new_value": None::<String>,
-                    },
-                ),
+                )
             })
             .await?;
         Ok(())
@@ -279,23 +245,28 @@ impl Default for TagRepository {
     }
 }
 
-impl<'a> TryFrom<&Row<'a>> for TagField {
-    type Error = Error;
+fn to_field(row: &Row) -> MetadataField {
+    let field_type: String = row.get_unwrap(1);
+    let field_type = TagFieldType::from(field_type);
+    let value_discriminator: Option<String> = row.get_unwrap(2);
+    let old_value = to_value(row, 3, value_discriminator);
+    let new_value_discriminator: Option<String> = row.get_unwrap(4);
+    let new_value = to_value(row, 5, new_value_discriminator);
+    MetadataField {
+        field_type,
+        new_value,
+        old_value,
+    }
+}
 
-    fn try_from(row: &Row<'a>) -> std::prelude::v1::Result<Self, Self::Error> {
-        let tag_field_type: String = row.get_unwrap(2);
-        let tag_field_type = TagFieldType::from(tag_field_type);
-        let discriminator: String = row.get_unwrap(3);
-        let tag_type: String = row.get_unwrap(1);
-        let tag_type = TagType::from(tag_type.as_str());
-        let audio_file_id: String = row.get_unwrap(0);
-        let tag_id = TagId::new(AudioFileId::new(PathBuf::from(audio_file_id)), tag_type);
-        let id = TagFieldId::new(tag_id, tag_field_type);
-        Ok(match discriminator.as_str() {
-            "Binary" => TagField::Binary(id, row.get_unwrap(4), row.get_unwrap(5)),
-            "Text" => TagField::Text(id, row.get_unwrap(4), row.get_unwrap(5)),
-            "Unknown" => TagField::Unknown(id, row.get_unwrap(4)),
-            _ => panic!("Unknown tag field discriminator: {}!", discriminator),
-        })
+fn to_value(row: &Row, index: usize, discriminator: Option<String>) -> Option<FieldValue> {
+    match discriminator {
+        Some(discriminator) => match discriminator.as_str() {
+            "Binary" => Some(FieldValue::Binary(row.get_unwrap(index))),
+            "Text" => Some(FieldValue::Text(row.get_unwrap(index))),
+            "Unknown" => Some(FieldValue::Unknown),
+            _ => panic!("Unknown discriminator: {}!", discriminator),
+        },
+        None => None,
     }
 }

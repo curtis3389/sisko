@@ -74,14 +74,14 @@ const DDL: &str = r#"
     CREATE INDEX idx_audio_files_recording_id
     ON audio_files(recording_id);
 
-    CREATE TABLE tag_fields (
+    CREATE TABLE metadata_fields (
         audio_file_id TEXT NOT NULL,
-        tag_type TEXT NOT NULL,
-        tag_field_type TEXT NOT NULL,
-        discriminator TEXT NOT NULL,
+        field_type TEXT NOT NULL,
+        value_discriminator TEXT,
         value TEXT,
+        new_value_discriminator TEXT,
         new_value TEXT,
-        PRIMARY KEY (audio_file_id, tag_type, tag_field_type),
+        PRIMARY KEY (audio_file_id, field_type),
         FOREIGN KEY (audio_file_id) REFERENCES audio_files(id)
     );
 "#;

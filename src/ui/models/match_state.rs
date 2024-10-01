@@ -1,3 +1,8 @@
+use crate::domain::{
+    models::Track,
+    repos::{AudioFileRepository, TagRepository},
+};
+use anyhow::Result;
 use std::ops::BitOr;
 
 // TODO: add match confidence to matched variants
@@ -10,6 +15,22 @@ pub enum MatchState {
 }
 
 impl MatchState {
+    pub async fn for_tracks(tracks: &[Track]) -> Result<Vec<MatchState>> {
+        let mut match_states = vec![];
+        for track in tracks {
+            let matches = AudioFileRepository::instance().get_matched(track).await?;
+            let is_matched = !matches.is_empty();
+            let mut has_changes: Vec<bool> = vec![];
+            for m in matches {
+                let tag = TagRepository::instance().get(&m).await?;
+                has_changes.push(tag.has_changes());
+            }
+            let has_changes = has_changes.iter().any(|h| *h);
+            match_states.push(MatchState::from((is_matched, has_changes)));
+        }
+        Ok(match_states)
+    }
+
     pub fn has_changes(&self) -> bool {
         match self {
             MatchState::MatchedChanges | MatchState::UnmatchedChanges => true,

@@ -1,6 +1,6 @@
 use super::{CbSinkService, UiEventService};
 use crate::{
-    domain::models::{AudioFile, Tag},
+    domain::models::{AudioFile, Metadata},
     infrastructure::TableViewExtensions,
     ui::{
         events::UiEvent,
@@ -22,28 +22,27 @@ impl ClusterTable {
         Self {}
     }
 
-    pub fn add_cluster_file(&self, audio_file: AudioFile, tags: &Vec<Tag>) -> Result<()> {
-        let audio_file_view = AudioFileView::new(&audio_file, tags);
+    pub fn add_cluster_file(&self, audio_file: AudioFile, metadata: &Metadata) -> Result<()> {
+        let audio_file_view = AudioFileView::new(&audio_file, metadata);
         CbSinkService::instance()?
             .send(Box::new(move |s: &mut Cursive| {
                 s.call_on_name(
                     CLUSTER_FILE_TABLE,
-                    |table: &mut TableView<AudioFileView, AudioFileColumn>| {
-                        match table.index_of(|i| i.id == audio_file_view.id) {
-                            Some(index) => {
-                                table.remove_item(index);
-                                table.insert_item_at(index, audio_file_view.clone());
-                            }
-                            None => {
-                                table.insert_item(audio_file_view.clone());
-                                if table.len() == 1 {
-                                    if let Err(e) = UiEventService::instance()
-                                        .send(UiEvent::SelectClusterFile(audio_file_view))
-                                    {
-                                        error!("Error sending select cluster file event: {e}!");
-                                        // TODO: log error
-                                    };
-                                }
+                    |table: &mut TableView<AudioFileView, AudioFileColumn>| match table
+                        .index_of(|i| i.id == audio_file_view.id)
+                    {
+                        Some(index) => {
+                            table.remove_item(index);
+                            table.insert_item_at(index, audio_file_view.clone());
+                        }
+                        None => {
+                            table.insert_item(audio_file_view.clone());
+                            if table.len() == 1 {
+                                if let Err(e) = UiEventService::instance()
+                                    .send(UiEvent::SelectClusterFile(audio_file_view))
+                                {
+                                    error!("Error sending select cluster file event: {e}!");
+                                };
                             }
                         }
                     },

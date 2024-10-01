@@ -1,5 +1,5 @@
 [workspace]
-members = ["sisko_lib"]
+members = [ "cursive_react","sisko_lib"]
 
 [package]
 name = "sisko"

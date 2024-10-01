@@ -1,13 +1,32 @@
 use super::TagFieldColumn;
-use crate::domain::models::{TagField, TagFieldId};
-use crate::infrastructure::{Entity, EntityId};
+use crate::{
+    domain::models::{AudioFileId, FieldValueExtensions, MetadataField, TagFieldType},
+    infrastructure::{Entity, EntityId},
+};
 use cursive_table_view::TableViewItem;
 use std::cmp::{Eq, Ordering, PartialEq};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TagFieldViewId {
+    pub audio_file_id: AudioFileId,
+
+    pub field_type: TagFieldType,
+}
+
+impl EntityId for TagFieldViewId {
+    fn to_string(&self) -> String {
+        format!(
+            "{}:{}",
+            self.audio_file_id.to_string(),
+            self.field_type.display_name()
+        )
+    }
+}
 
 /// Represents the UI view of a tag field.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TagFieldView {
-    pub id: TagFieldId,
+    pub id: TagFieldViewId,
 
     pub name: String,
 
@@ -22,18 +41,21 @@ impl TagFieldView {
     /// # Arguments
     ///
     /// * `field` - The type of the field.
-    pub fn new(field: &TagField) -> Self {
+    pub fn new(audio_file_id: &AudioFileId, field: &MetadataField) -> Self {
         Self {
-            id: field.id().clone(),
-            name: field.display_name(),
-            new_value: field.display_new_value(),
-            value: field.display_value(),
+            id: TagFieldViewId {
+                audio_file_id: audio_file_id.clone(),
+                field_type: field.field_type.clone(),
+            },
+            name: field.field_type.display_name(),
+            new_value: field.new_value.display_value(),
+            value: field.old_value.display_value(),
         }
     }
 }
 
 impl Entity for TagFieldView {
-    type Id = TagFieldId;
+    type Id = TagFieldViewId;
 
     fn id(&self) -> &Self::Id
     where

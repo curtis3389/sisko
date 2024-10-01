@@ -3,11 +3,11 @@ pub mod infrastructure;
 pub mod ui;
 
 use crate::domain::events::DomainEvent;
-use crate::domain::models::{TagFieldId, TagId};
 use crate::domain::repos::{AudioFileRepository, TagRepository, TrackRepository};
 use crate::domain::services::{LogHistory, MediatorService, SiskoService};
+use crate::infrastructure::spawn;
 use crate::ui::events::UiEvent;
-use crate::ui::models::AlbumViewId;
+use crate::ui::models::{AlbumViewId, TagFieldViewId};
 use crate::ui::services::{CursiveWrapper, Ui, UiEventService};
 use anyhow::{anyhow, Result};
 use clap::Command;
@@ -129,40 +129,24 @@ pub async fn run_gui() -> Result<()> {
             UiEvent::OpenLogs => SiskoService::instance().open_logs(),
             UiEvent::FileSelected(file) => {
                 let file = file.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = SiskoService::instance().add_file(file).await {
-                        error!("{}", e);
-                    }
-                });
+                spawn(async move { SiskoService::instance().add_file(file).await });
                 Ok(())
             }
             UiEvent::FolderSelected(folder) => {
                 let folder = folder.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = SiskoService::instance().add_folder(folder).await {
-                        error!("{}", e);
-                    }
-                });
+                spawn(async move { SiskoService::instance().add_folder(folder).await });
                 Ok(())
             }
             UiEvent::OpenAddFile => Ui::instance().menu.open_file_dialog(),
             UiEvent::OpenAddFolder => Ui::instance().menu.open_directory_dialog(),
             UiEvent::SaveAudioFile(audio_file) => {
                 let audio_file = audio_file.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = SiskoService::instance().save_audio_file(&audio_file).await {
-                        error!("{}", e);
-                    }
-                });
+                spawn(async move { SiskoService::instance().save_audio_file(&audio_file).await });
                 Ok(())
             }
             UiEvent::ScanAudioFile(audio_file) => {
                 let audio_file = audio_file.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = SiskoService::instance().scan_audio_file(&audio_file).await {
-                        error!("{}", e);
-                    }
-                });
+                spawn(async move { SiskoService::instance().scan_audio_file(&audio_file).await });
                 Ok(())
             }
             UiEvent::SelectAlbumView(album_view) => {
@@ -198,13 +182,10 @@ pub async fn run_gui() -> Result<()> {
             }
             UiEvent::SelectClusterFile(audio_file_view) => {
                 let audio_file_view = audio_file_view.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = SiskoService::instance()
+                spawn(async move {
+                    SiskoService::instance()
                         .select_audio_file(&audio_file_view.id)
                         .await
-                    {
-                        error!("{}", e);
-                    }
                 });
                 Ok(())
             }
@@ -267,33 +248,17 @@ pub async fn run_gui() -> Result<()> {
             }
             UiEvent::SubmitMetadataRow(tag_field_view) => {
                 let tag_field_view = tag_field_view.clone();
-                tokio::spawn(async move {
-                    let TagFieldId {
-                        tag_id:
-                            TagId {
-                                audio_file_id,
-                                tag_type,
-                            },
-                        tag_field_type,
+                spawn(async move {
+                    let TagFieldViewId {
+                        audio_file_id,
+                        field_type,
                     } = &tag_field_view.id;
-                    match AudioFileRepository::instance().get(audio_file_id).await {
-                        Ok(audio_file) => {
-                            match TagRepository::instance().get(&audio_file, tag_type).await {
-                                Ok(tag) => {
-                                    let field =
-                                        tag.get_field(tag_field_type.clone()).unwrap().clone();
-                                    if let Err(e) = Ui::instance()
-                                        .metadata_table
-                                        .open_tag_field_dialog(audio_file, *tag_type, field)
-                                    {
-                                        error!("{}", e);
-                                    }
-                                }
-                                Err(e) => error!("{}", e),
-                            }
-                        }
-                        Err(e) => error!("{}", e),
-                    }
+                    let audio_file = AudioFileRepository::instance().get(audio_file_id).await?;
+                    let metadata = TagRepository::instance().get(&audio_file).await?;
+                    let field = metadata.get(field_type).unwrap();
+                    Ui::instance()
+                        .metadata_table
+                        .open_tag_field_dialog(audio_file, field.clone())
                 });
                 Ok(())
             }
@@ -305,17 +270,19 @@ pub async fn run_gui() -> Result<()> {
 
     // bind domain events to the ui
     MediatorService::instance().add_handler(Box::new(|event| {
-        match event {
+        SiskoService::instance().update_ui();
+        /*match event {
             DomainEvent::AudioFileAdded(audio_file) => {
                 SiskoService::instance().handle_audio_file_added(audio_file);
             }
+            DomainEvent::AudioFileRemoved(_) => todo!(),
             DomainEvent::AudioFileUpdated(audio_file) => {
                 SiskoService::instance().handle_audio_file_updated(audio_file);
             }
             DomainEvent::TagUpdated(tag) => {
                 SiskoService::instance().handle_tag_updated(tag);
             }
-        }
+        }*/
         Ok(())
     }));
 
